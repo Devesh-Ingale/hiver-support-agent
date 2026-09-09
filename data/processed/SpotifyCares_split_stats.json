@@ -1,0 +1,18 @@
+{
+  "brand": "SpotifyCares",
+  "brand_alias_ids": [
+    "115888"
+  ],
+  "threads_total": 28263,
+  "customer_roots": 28204,
+  "brand_initiated_roots": 59,
+  "orphan_roots": 32,
+  "cutoff": "2017-11-17T22:07:39+00:00",
+  "tail_end": "2017-12-01T22:07:39+00:00",
+  "corpus_threads": 20883,
+  "corpus_with_substantive_reply": 8969,
+  "pool_candidates": 6418,
+  "pool_english": 5959,
+  "pool_near_dup_clusters": 6221,
+  "pool_near_dup_collapsed": 197
+}

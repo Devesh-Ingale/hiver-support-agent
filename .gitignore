@@ -28,3 +28,6 @@ report/_report_with_appendix.md
 
 # local free-tier call counter
 outputs/gemini_daily_calls.json
+
+# rebuilt by `cli index` in seconds from the committed corpus
+data/processed/*.joblib

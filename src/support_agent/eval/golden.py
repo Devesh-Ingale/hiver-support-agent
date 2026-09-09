@@ -14,7 +14,7 @@ from sklearn.cluster import KMeans
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 ESCALATION_KEYWORDS = re.compile(
-    r"\b(refund|charged|charge|billing|bill|payment|paid|money|hacked|hack|stolen|unauthori[sz]ed|password|"
+    r"\b(?:refund|charged|charge|billing|bill|payment|paid|money|hacked|hack|stolen|unauthori[sz]ed|password|"
     r"lawyer|legal|sue|fraud|scam|cancel(?:l?ing|led)?|unsubscribe|again|third time|3rd time|still|"
     r"ridiculous|disgusting|worst|hate|never again|speak to|human|real person|manager)\b",
     re.I,

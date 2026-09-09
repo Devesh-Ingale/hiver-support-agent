@@ -1,0 +1,21 @@
+{
+  "pool_size": 6418,
+  "excluded": {
+    "orphan_root_fragment": 8,
+    "near_duplicate_of_kept_item": 196,
+    "near_empty_beyond_quota": 69,
+    "non_english_beyond_quota": 203
+  },
+  "eligible": 5930,
+  "counts": {
+    "A": 120,
+    "B": 80,
+    "spare": 75,
+    "dev": 50,
+    "reason:uniform_random": 233,
+    "reason:escalation_keyword_oversample": 40,
+    "reason:topic_cluster_floor": 40,
+    "reason:quota_near_empty": 6,
+    "reason:quota_non_english": 6
+  }
+}
