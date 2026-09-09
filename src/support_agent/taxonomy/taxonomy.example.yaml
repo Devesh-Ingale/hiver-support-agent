@@ -1,0 +1,74 @@
+# Template / smoke-test taxonomy. The real one (taxonomy.yaml) is written from the data after brand
+# selection and frozen before labelling. Same schema.
+brand: SpotifyCares
+version: example
+intents:
+  - id: playback_issue
+    name: Playback or app malfunction
+    definition: Music will not play, skips, stutters, crashes, or the app misbehaves on some device.
+    examples: ["app crashes when I open a playlist", "songs keep skipping on my phone"]
+    edge_rules: ["Login trouble is account_access, not playback_issue."]
+    typical_action: troubleshooting steps (reinstall, log out/in, clear cache)
+  - id: payment_billing
+    name: Payment and billing
+    definition: Charges, refunds, subscription price or payment failures.
+    examples: ["charged twice this month", "premium payment keeps failing"]
+    typical_action: move to a private channel to check the account
+  - id: account_access
+    name: Account access
+    definition: Cannot log in, hacked account, password or email problems.
+    examples: ["someone changed my email", "password reset link never arrives"]
+    typical_action: move to a private channel to verify identity
+  - id: feature_request_feedback
+    name: Feature request or product feedback
+    definition: Wants something the product does not do, or complains about a design choice.
+    examples: ["bring back the old shuffle", "why is there no dark mode on desktop"]
+    typical_action: thank, acknowledge, sometimes point to the community/ideas page
+  - id: other_unclear
+    name: Other / unclear
+    definition: Anything else, or too little text to tell.
+policy:
+  good_reply:
+    - gives the first troubleshooting step the brand actually uses for this issue, from the evidence
+    - is friendly, short (one or two sentences), with one clear next step
+    - moves account or payment matters to a private channel instead of discussing them in public
+  never:
+    - ask for passwords, payment details or other sensitive data in public
+    - promise refunds, fixes, features or timelines
+    - invent steps, links or policies that are not in the evidence
+  auto_ok:
+    - a known troubleshooting step from the evidence addresses the issue
+    - the tweet is praise, feedback or a feature request that a short acknowledgement answers
+    - the tweet asks a general how-to question the evidence answers
+  reasons:
+    - code: account_or_pii
+      tier: hard
+      description: needs account access or an exchange of personal data (hacked account, email change, identity)
+      patterns: ['\b(hacked|hack(?:ed)? into|someone (?:else )?(?:is )?using my account|unauthori[sz]ed|stolen account|changed my email)\b']
+    - code: payment_refund
+      tier: hard
+      description: money — charges, refunds, billing disputes, failed or double payments
+      patterns: ['\b(refund|charged twice|double[- ]charged|chargeback|overcharg\w*|money back)\b']
+    - code: legal_safety_threat
+      tier: hard
+      description: legal threats, safety, self-harm, harassment, discrimination, press or regulators
+      patterns: ['\b(lawyer|attorney|lawsuit|sue (?:you|spotify)|legal action|suicid\w*|kill myself|harass\w*|discriminat\w*|racis\w*|police)\b']
+    - code: explicit_human_request
+      tier: hard
+      description: the customer explicitly asks for a person or has already contacted support repeatedly
+      patterns: ['\b(speak (?:to|with) (?:a )?(?:human|person|real person|someone)|talk to (?:a )?(?:human|real person)|(?:third|3rd|fourth|4th) time (?:I|i)\S* (?:contact|ask|tweet))\b']
+    - code: anger_churn
+      tier: soft
+      description: strong anger, insults, or a credible threat to cancel — a human should reach out
+    - code: non_english
+      tier: routing
+      description: not in English
+    - code: no_actionable_content
+      tier: routing
+      description: nothing to act on (image-only, emoji-only, empty)
+    - code: no_relevant_resolution
+      tier: routing
+      description: no sufficiently similar historical case to ground a reply
+    - code: draft_invalid
+      tier: routing
+      description: the model's draft failed validity checks and was not sent

@@ -38,7 +38,7 @@ class Evidence:
 
 class TfidfIndex:
     def __init__(self, word_ngrams: tuple[int, int] = (1, 2), char_ngrams: tuple[int, int] = (3, 5),
-                 min_df: int = 2, boilerplate_penalty: float = 0.15):
+                 min_df: int = 2, boilerplate_penalty: float = 0.2):
         self.word_vec = TfidfVectorizer(ngram_range=word_ngrams, min_df=min_df, sublinear_tf=True,
                                         strip_accents="unicode", lowercase=True)
         self.char_vec = TfidfVectorizer(analyzer="char_wb", ngram_range=char_ngrams, min_df=min_df,

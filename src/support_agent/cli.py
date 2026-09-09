@@ -37,9 +37,55 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("profile", help="profile the largest brands -> outputs/results/brand_profile.{csv,md}")
     s.add_argument("--top", type=int, default=15)
 
+    s = sub.add_parser("smoke", help="run a handful of sample tweets through a model (no retrieval) to check JSON validity and latency")
+    s.add_argument("--provider", choices=["local", "gemini"], default="local")
+    s.add_argument("--model", default=None, help="override the configured model id")
+    s.add_argument("--n", type=int, default=6)
+    s.add_argument("--taxonomy", default="example", help="'example' or a path to a taxonomy yaml")
+
     for name, help_text in LATER.items():
         sub.add_parser(name, help=help_text + " (not implemented yet)")
     return p
+
+
+SMOKE_TWEETS = [
+    "@SpotifyCares my app crashes every time I open a playlist on my iPhone, been like this since the update",
+    "@SpotifyCares I was charged twice for premium this month?? I want a refund",
+    "@SpotifyCares someone is using my account, songs I never played are in my history. I think I've been hacked",
+    "@SpotifyCares bring back the old shuffle, the new one plays the same 10 songs",
+    "@SpotifyCares songs keep skipping in offline mode on android",
+    "@SpotifyCares this is the third time I'm asking, I want to speak to a real person",
+    "@SpotifyCares 😩😩",
+    "@SpotifyCares thanks for the quick fix yesterday, you guys are great",
+]
+
+
+def cmd_smoke(args, settings) -> None:
+    import statistics
+    from pathlib import Path
+
+    from .agent.pipeline import Agent, AgentConfig
+    from .llm import make_client
+    from .taxonomy import load_taxonomy
+
+    path = settings.paths.taxonomy_dir / "taxonomy.example.yaml" if args.taxonomy == "example" else Path(args.taxonomy)
+    taxonomy = load_taxonomy(path)
+    llm = make_client(args.provider, settings, model=args.model)
+    agent = Agent(llm, taxonomy, AgentConfig(system=f"smoke:{llm.model}", use_retrieval=False))
+    print(f"model={llm.model} provider={llm.provider} prompt={agent.system_prompt.count(' ')} words\n")
+    rows = []
+    for i, text in enumerate(SMOKE_TWEETS[: args.n]):
+        row = agent.handle({"item_id": f"S{i}", "text": text, "lang": "en"})
+        rows.append(row)
+        flag = "PARSE-FAIL" if row["parse_failed"] else ("repaired" if row["repaired"] else "ok")
+        print(f"[{i}] {text}\n    -> {row['intent']} ({row['intent_confidence']:.2f}) | {row['decision']} [{row['reason_code']}]"
+              f" | {row['latency_ms']} ms | {flag}{' cached' if row['cached'] else ''}"
+              f"\n    reply: {row['reply']!r}\n    reason: {row['reason']}"
+              + (f"\n    violations: {row['violations']}" if row["violations"] else ""))
+    fresh = [r["latency_ms"] for r in rows if not r["cached"]]
+    print(f"\nparse failures: {sum(r['parse_failed'] for r in rows)}/{len(rows)}; repaired: {sum(r['repaired'] for r in rows)}; "
+          f"median latency (uncached): {statistics.median(fresh) if fresh else float('nan'):.0f} ms; "
+          f"draft violations: {sum(bool(r['violations']) for r in rows)}")
 
 
 def cmd_data(args, settings) -> None:
@@ -72,7 +118,7 @@ def cmd_profile(args, settings) -> None:
     print(md)
 
 
-COMMANDS = {"data": cmd_data, "threads": cmd_threads, "profile": cmd_profile}
+COMMANDS = {"data": cmd_data, "threads": cmd_threads, "profile": cmd_profile, "smoke": cmd_smoke}
 
 
 def main(argv: list[str] | None = None) -> int:

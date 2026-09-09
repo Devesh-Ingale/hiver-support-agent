@@ -9,12 +9,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from ..data.clean import CUSTOMER_MENTION_RE, URL_RE, content_tokens
+from ..data.clean import CUSTOMER_MENTION_RE, SIGNOFF_RE, URL_RE, content_tokens
 from .schemas import AgentOutput
 
 # --- validity checks on a draft (independent of the policy file) ---------------------------------------
 
-SIGNOFF_RE = re.compile(r"(?:^|\s)[/^~-]\s?[A-Z]{2,3}[.!]?\s*$")
 PROMISE_RE = re.compile(
     r"\b(will be (?:fixed|resolved|refunded|credited)|you(?:'ll| will) (?:get|receive|be) (?:a )?(?:full )?refund(?:ed)?|"
     r"we(?:'ll| will) (?:refund|credit|fix|resolve|reimburse)|guarantee|within \d+ (?:minutes|hours|days|weeks)|"
