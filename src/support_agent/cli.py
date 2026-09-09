@@ -16,14 +16,6 @@ from .config import ROOT, load_settings
 
 log = logging.getLogger(__name__)
 
-LATER = {
-    "judge": "LLM-as-judge runs (absolute, pairwise, validation, consistency)",
-    "rate": "human rating CLI for the judge-agreement study",
-    "eval": "recompute every metric from committed outputs",
-    "figures": "render report figures",
-    "docx": "render REPORT.md to report/report.docx",
-}
-
 SMOKE_TWEETS = [
     "@SpotifyCares my app crashes every time I open a playlist on my iPhone, been like this since the update",
     "@SpotifyCares I was charged twice for premium this month?? I want a refund",
@@ -91,8 +83,24 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("baselines", help="trivial + simple baselines and the human reference rows -> outputs/runs/")
     s.add_argument("--split", default="test", choices=["test", "dev"])
 
-    for name, help_text in LATER.items():
-        sub.add_parser(name, help=help_text + " (not implemented yet)")
+    s = sub.add_parser("judge", help="LLM-as-judge runs (Gemini) -> outputs/judge/")
+    s.add_argument("--mode", required=True, choices=["absolute", "pairwise", "validate", "perturb", "consistency"])
+    s.add_argument("--systems", default="main,main_gemini,simple", help="absolute: comma-separated run names (incl. human_ref)")
+    s.add_argument("--x", default="main", help="pairwise: system X")
+    s.add_argument("--y", default="simple", help="pairwise: system Y")
+    s.add_argument("--limit", type=int, default=None, help="judge only a fixed random subset of this size")
+
+    s = sub.add_parser("rate", help="human rating CLI (blinded) -> outputs/human/")
+    s.add_argument("--mode", required=True, choices=["pairs", "absolute"])
+    s.add_argument("--n", type=int, default=80, help="pairs: number of pairs")
+    s.add_argument("--per-system", type=int, default=10, help="absolute: items per system")
+    s.add_argument("--systems", default="main,simple,trivial_escalate,no_rag")
+    s.add_argument("--other", default="simple", help="pairs: the system compared against main")
+
+    sub.add_parser("eval", help="recompute every metric from committed outputs -> outputs/results/{metrics.json,tables.md}")
+
+    sub.add_parser("figures", help="render report figures -> report/figures/*.png")
+    sub.add_parser("docx", help="render REPORT.md (+ decision-log appendix) -> report/report.docx via pandoc")
     return p
 
 
@@ -362,9 +370,158 @@ def cmd_baselines(args, settings) -> None:
     print(f"majority intent (from {'dev' if dev else 'test'}): {majority}; simple baseline: {len(rows)} rows; human reference replies: {len(ref)}")
 
 
+# ----------------------------------------------------------------------------------------------------------
+# proof stage
+# ----------------------------------------------------------------------------------------------------------
+def _run_rows(settings, system: str) -> dict[str, dict]:
+    from .llm.batch import read_jsonl
+
+    path = _require(settings.paths.runs / f"{system}.jsonl", f"run `run --system {system}` or `baselines` first")
+    return {r["item_id"]: r for r in read_jsonl(path) if "error" not in r}
+
+
+def _test_items_and_evidence(settings) -> tuple[dict[str, dict], dict[str, list[dict]]]:
+    items = {t["item_id"]: t for t in _load_split(settings, "test")}
+    main = _run_rows(settings, "main")   # every system is judged against the same historical context: main's evidence
+    return items, {i: r.get("evidence", []) for i, r in main.items()}
+
+
+def cmd_judge(args, settings) -> None:
+    from .eval.judge import (VALIDATION_CASES, Judge, pairwise_both_orders, perturb_with_fabricated_step, stratified_subset,
+                             validation_item)
+    from .llm import make_client
+    from .llm.batch import run_batch
+
+    taxonomy = _load_taxonomy(settings, "real")
+    judge = Judge(make_client("gemini", settings), taxonomy)
+    settings.paths.judge.mkdir(parents=True, exist_ok=True)
+
+    if args.mode == "validate":
+        item, evidence = validation_item(settings.brand)
+        cases = [{"item_id": f"VAL-{label}", "label": label, "reply": reply, "expected_sendable": expected} for label, reply, expected in VALIDATION_CASES]
+
+        def fn(c):
+            v = judge.absolute(item, {"system": "validation", "reply": c["reply"], "decision": "auto", "reason": "validation case"}, evidence)
+            return {**v, "item_id": c["item_id"], "label": c["label"], "expected_sendable": c["expected_sendable"]}
+
+        rows = run_batch(cases, fn, settings.paths.judge / "validation.jsonl", desc="judge:validate")
+        ok = [r for r in rows if not r.get("judge_parse_failed") and "error" not in r]
+        print(f"validation accuracy on sendable: {sum(bool(r['sendable']) == r['expected_sendable'] for r in ok)}/{len(ok)}")
+        return
+
+    items, evidence = _test_items_and_evidence(settings)
+
+    if args.mode == "absolute":
+        for system in args.systems.split(","):
+            rows = _run_rows(settings, system)
+            ids = sorted(set(rows) & set(items))
+            if args.limit:
+                ids = stratified_subset(ids, args.limit, settings.seed)
+            out = run_batch([{"item_id": i} for i in ids],
+                            lambda b, rows=rows: judge.absolute(items[b["item_id"]], rows[b["item_id"]], evidence.get(b["item_id"], [])),
+                            settings.paths.judge / f"absolute_{system}.jsonl", desc=f"judge:{system}")
+            ok = [r for r in out if not r.get("judge_parse_failed") and "error" not in r]
+            print(f"{system}: {len(ok)} judged; pass rate {sum(bool(r['sendable']) for r in ok) / max(len(ok), 1):.1%}")
+    elif args.mode == "pairwise":
+        x_rows, y_rows = _run_rows(settings, args.x), _run_rows(settings, args.y)
+        ids = sorted(i for i in set(x_rows) & set(y_rows) & set(items) if x_rows[i].get("reply") and y_rows[i].get("reply"))
+        if args.limit:
+            ids = stratified_subset(ids, args.limit, settings.seed)
+        out = run_batch([{"item_id": i} for i in ids],
+                        lambda b: pairwise_both_orders(judge, items[b["item_id"]], x_rows[b["item_id"]], y_rows[b["item_id"]], evidence.get(b["item_id"], [])),
+                        settings.paths.judge / f"pairwise_{args.x}_vs_{args.y}.jsonl", desc=f"judge:{args.x}-vs-{args.y}")
+        ok = [r for r in out if not r.get("judge_parse_failed") and "error" not in r]
+        wins = sum(r["combined"] == args.x for r in ok)
+        print(f"{args.x} vs {args.y}: n={len(ok)}, {args.x} wins {wins}, {args.y} wins {sum(r['combined'] == args.y for r in ok)}, "
+              f"ties {sum(r['combined'] == 'tie' for r in ok)}, flips {sum(r['flipped'] for r in ok)}")
+    elif args.mode == "perturb":
+        main = _run_rows(settings, "main")
+        ids = sorted(i for i in main if i in items and main[i].get("decision") == "auto" and main[i].get("reply"))
+        ids = stratified_subset(ids, args.limit or 20, settings.seed)
+        cases = []
+        for i in ids:
+            cases.append({"pair_key": f"{i}:original", "item_id": i, "variant": "original", "reply": main[i]["reply"]})
+            cases.append({"pair_key": f"{i}:perturbed", "item_id": i, "variant": "perturbed", "reply": perturb_with_fabricated_step(main[i]["reply"])})
+
+        def fn(c):
+            row = {**main[c["item_id"]], "reply": c["reply"]}
+            v = judge.absolute(items[c["item_id"]], row, evidence.get(c["item_id"], []))
+            return {**v, "pair_key": c["pair_key"], "variant": c["variant"]}
+
+        out = run_batch(cases, fn, settings.paths.judge / "perturbation.jsonl", id_key="pair_key", desc="judge:perturb")
+        print(f"perturbation: {len(out)} judgments written")
+    elif args.mode == "consistency":
+        main = _run_rows(settings, "main")
+        ids = stratified_subset(sorted(set(main) & set(items)), args.limit or 50, settings.seed)
+        out = run_batch([{"item_id": i} for i in ids],
+                        lambda b: judge.absolute(items[b["item_id"]], main[b["item_id"]], evidence.get(b["item_id"], []), paraphrase=True),
+                        settings.paths.judge / "consistency.jsonl", desc="judge:consistency")
+        print(f"consistency: {len(out)} re-judged with a paraphrased prompt")
+
+
+def cmd_rate(args, settings) -> None:
+    from .eval.rate_cli import Rater, plan_absolute, plan_pairs
+
+    taxonomy = _load_taxonomy(settings, "real")
+    items, evidence = _test_items_and_evidence(settings)
+    settings.paths.human.mkdir(parents=True, exist_ok=True)
+    plan_path = settings.paths.human / f"plan_{args.mode}.json"
+    if plan_path.exists():
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    elif args.mode == "pairs":
+        plan = plan_pairs(list(_run_rows(settings, "main").values()), list(_run_rows(settings, args.other).values()), args.n, settings.seed)
+    else:
+        plan = plan_absolute({s: list(_run_rows(settings, s).values()) for s in args.systems.split(",")}, args.per_system, settings.seed)
+    if not plan_path.exists():
+        plan_path.write_text(json.dumps(plan, indent=1, ensure_ascii=False), encoding="utf-8")
+    rater = Rater(taxonomy.brand, items, evidence, settings.paths.human / ("pairs.jsonl" if args.mode == "pairs" else "absolute.jsonl"))
+    n = rater.run_pairs(plan) if args.mode == "pairs" else rater.run_absolute(plan)
+    print(f"\nrated {n} this session")
+
+
+def cmd_eval(args, settings) -> None:
+    from .eval.run_eval import evaluate
+
+    evaluate(settings)
+    print((settings.paths.results / "tables.md").read_text(encoding="utf-8"))
+    print(f"full metrics -> {settings.paths.results / 'metrics.json'}")
+
+
+def cmd_figures(args, settings) -> None:
+    from .eval.figures import render_all
+
+    for path in render_all(settings):
+        print(f"wrote {path}")
+
+
+def cmd_docx(args, settings) -> None:
+    import os
+    import shutil
+    import subprocess
+
+    pandoc = shutil.which("pandoc") or str(Path(os.environ.get("LOCALAPPDATA", "")) / "Pandoc" / "pandoc.exe")
+    if not Path(pandoc).exists():
+        sys.exit("pandoc not found; install it (winget install JohnMacFarlane.Pandoc) or `pip install pypandoc_binary`")
+    report_dir = settings.paths.report
+    report_dir.mkdir(parents=True, exist_ok=True)
+    reference = report_dir / "reference.docx"
+    if not reference.exists():
+        subprocess.run([pandoc, "-o", str(reference), "--print-default-data-file", "reference.docx"], check=True)
+    decisions = (ROOT / "DECISIONS.md").read_text(encoding="utf-8").split("\n", 1)[1]
+    page_break = '\n\n```{=openxml}\n<w:p><w:r><w:br w:type="page"/></w:r></w:p>\n```\n\n'
+    combined = (ROOT / "REPORT.md").read_text(encoding="utf-8") + page_break + "# Appendix A — Decision log\n" + decisions
+    source = report_dir / "_report_with_appendix.md"
+    source.write_text(combined, encoding="utf-8")
+    out = report_dir / "report.docx"
+    subprocess.run([pandoc, str(source), "-o", str(out), "--reference-doc", str(reference), "--resource-path", str(ROOT),
+                    "-f", "markdown+pipe_tables+raw_attribute", "--wrap=none"], check=True, cwd=ROOT)
+    print(f"wrote {out}")
+
+
 COMMANDS = {
     "data": cmd_data, "threads": cmd_threads, "profile": cmd_profile, "prepare": cmd_prepare, "taxonomy": cmd_taxonomy,
     "sample": cmd_sample, "label": cmd_label, "index": cmd_index, "smoke": cmd_smoke, "run": cmd_run, "baselines": cmd_baselines,
+    "judge": cmd_judge, "rate": cmd_rate, "eval": cmd_eval, "figures": cmd_figures, "docx": cmd_docx,
 }
 
 
@@ -374,11 +531,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
     settings = load_settings()
-    handler = COMMANDS.get(args.cmd)
-    if handler is None:
-        print(f"`{args.cmd}` is not implemented yet: {LATER[args.cmd]}", file=sys.stderr)
-        return 2
-    handler(args, settings)
+    COMMANDS[args.cmd](args, settings)
     return 0
 
 
