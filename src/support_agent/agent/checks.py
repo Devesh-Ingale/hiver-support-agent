@@ -121,8 +121,10 @@ def post_process(output: AgentOutput, message: str, *, lang: str, evidence_texts
             forced = "draft_invalid"
 
     if forced:
-        # a model that already escalated for a substantive reason keeps its reason; we only add caution
-        keep_model_reason = output.decision == "escalate" and output.reason_code not in ("none", "draft_invalid")
+        # a model that already escalated for a substantive reason keeps its reason; we only add caution —
+        # except for facts about the message itself (language, no content), where the objective code wins
+        keep_model_reason = (output.decision == "escalate" and output.reason_code not in ("none", "draft_invalid")
+                             and forced not in ("non_english", "no_actionable_content"))
         output = output.model_copy(update={
             "decision": "escalate",
             "reason_code": output.reason_code if keep_model_reason else forced,

@@ -90,6 +90,9 @@ def test_post_process_routing_rules():
     assert r.output.reason_code == "non_english"
     r = run(make_output(), "@Brand 😩😩", lang="unk")
     assert r.output.reason_code == "no_actionable_content"
+    # objective message facts override even a model that escalated for its own reason
+    r = run(make_output(decision="escalate", reason_code="anger_churn", reason="distress emojis"), "@Brand 😩😩", lang="unk")
+    assert r.output.reason_code == "no_actionable_content" and r.forced_reason == "no_actionable_content"
     r = run(make_output(), "the app crashes when I open a playlist", retrieval_max_sim=0.05)
     assert r.output.reason_code == "no_relevant_resolution"
     r = run(make_output(), "the app crashes when I open a playlist", retrieval_max_sim=None)
