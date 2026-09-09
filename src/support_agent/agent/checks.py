@@ -63,6 +63,8 @@ def check_reply(reply: str, evidence_texts: list[str], max_chars: int = 280) -> 
         v.add("promise")
     if SENSITIVE_RE.search(text) and not DM_CONTEXT_RE.search(text):
         v.add("sensitive_request_public")
+    if "|||" in text or "[E" in text:
+        v.add("formatting_artifact")   # copied a turn separator or an evidence tag out of the prompt
     return v
 
 

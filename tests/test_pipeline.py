@@ -44,6 +44,19 @@ def index() -> TfidfIndex:
     return TfidfIndex(min_df=1).fit(docs)
 
 
+def test_evidence_rendering_numbers_turns():
+    from support_agent.retrieval.index import Evidence
+
+    ev = [Evidence(doc_id="x", message="app crashes", brand_turns="Which device? ||| Thanks! Try a clean reinstall", first_reply="Which device?",
+                   substantive=True, created_at="2017-11-01", similarity=0.42, score=0.42),
+          Evidence(doc_id="y", message="charged twice", brand_turns="Please DM us", first_reply="Please DM us",
+                   substantive=False, created_at="2017-11-01", similarity=0.3, score=0.24)]
+    text = prompts.render_evidence(ev, "SpotifyCares")
+    assert "|||" not in text
+    assert 'SpotifyCares reply 1: "Which device?"' in text and 'SpotifyCares reply 2: "Thanks! Try a clean reinstall"' in text
+    assert '[E2] similarity 0.30\n  Customer: "charged twice"\n  SpotifyCares replied: "Please DM us"' in text
+
+
 def test_taxonomy_loader_and_rendering(taxonomy):
     assert taxonomy.intent_ids == ["playback_issue", "payment_billing", "account_access", "other_unclear"]
     assert taxonomy.other_intent == "other_unclear"

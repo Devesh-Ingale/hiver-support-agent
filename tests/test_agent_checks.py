@@ -61,6 +61,8 @@ def test_check_reply_catches_each_violation():
     assert "promise" in check_reply("You'll get a full refund", ev).codes
     assert "sensitive_request_public" in check_reply("Reply with your password and card number", ev).codes
     assert "sensitive_request_public" not in check_reply("DM us and we'll reset your password from there", ev).codes
+    assert "formatting_artifact" in check_reply("Try a reinstall. ||| Thanks! Let us know", ev).codes
+    assert "formatting_artifact" in check_reply("As shown in [E1], try a reinstall", ev).codes
     assert not check_reply("Sorry to hear that! Try logging out and back in, then let us know how it goes.", ev)
 
 

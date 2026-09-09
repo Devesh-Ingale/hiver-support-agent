@@ -17,6 +17,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import normalize
 
 from ..data.clean import CUSTOMER_MENTION_RE, normalize_for_dedup, strip_signoffs
+from ..data.threads import TURN_SEP
 
 REQUIRED_COLUMNS = ("doc_id", "message", "brand_turns", "first_reply", "substantive", "created_at")
 

@@ -27,6 +27,7 @@ Every time a metric was computed on the test set, with the prompt/config version
 | round | date | observation on dev (50 items, unlabelled or labelled as noted) | change | version |
 |---|---|---|---|---|
 | 1 | 2026-09-09 | Pre-label run of `main`: 0/50 parse failures, but 24/50 drafts copied agent initials (`/GT`, `/LO`) from the evidence; 20 were therefore routed to a human as `draft_invalid`. A sign-off followed by the DM deep-link (`… /LO https://t.co/…`) evaded the end-anchored check. Retrieval max-similarity median 0.30 (min 0.17). Median latency 22.7 s with retrieval vs 16.0 s without. | Strip agent initials from evidence text at retrieval time (they are convention, not content); make the sign-off validity check position-independent. Prompt wording unchanged. | v1 → v1.1 |
+| 2 | 2026-09-10 | v1.1 re-run: sign-off violations 24 → 0; remaining raw-draft violations 2 `url_not_in_evidence` + 1 `promise` (all caught, routed to a human); auto rate 76 %. One auto draft copied the evidence's turn separator (`… ||| Thanks! …`), producing a two-turn "tweet". | Render multi-turn evidence as numbered turns; treat `|||` or `[E…]` in a draft as a `formatting_artifact` validity violation. Prompt wording unchanged. | v1.1 → v1.2 |
 
 ## Decisions
 

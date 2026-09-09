@@ -3,13 +3,15 @@
 v1   — 2026-09-09. Written before any dev-set result existed. Iterations happen on the dev set only.
 v1.1 — 2026-09-09, dev round 1: agent sign-off initials are stripped from the evidence shown to the model
        (24/50 dev drafts had copied them). Prompt text unchanged; the version bump re-keys the cache.
+v1.2 — 2026-09-10, dev round 2: multi-turn evidence is rendered as numbered turns instead of a " ||| "
+       separator, which one dev draft had copied verbatim. Prompt text otherwise unchanged.
 """
 from __future__ import annotations
 
-from ..retrieval.index import Evidence
+from ..retrieval.index import TURN_SEP, Evidence
 from ..taxonomy import Taxonomy
 
-PROMPT_VERSION = "v1.1"
+PROMPT_VERSION = "v1.2"
 
 SYSTEM_TEMPLATE = """You are the social-media support agent for {brand} on Twitter. You handle one incoming customer tweet at a time and you answer in public, so anyone can read what you write.
 
@@ -56,8 +58,13 @@ def render_evidence(evidence: list[Evidence], brand: str, max_chars_per_turns: i
         return NO_EVIDENCE_TEXT.format(brand=brand)
     blocks = []
     for i, e in enumerate(evidence, start=1):
-        turns = e.brand_turns if len(e.brand_turns) <= max_chars_per_turns else e.brand_turns[:max_chars_per_turns] + " …"
-        blocks.append(f'[E{i}] similarity {e.similarity:.2f}\n  Customer: "{e.message}"\n  {brand} replied: "{turns}"')
+        text = e.brand_turns if len(e.brand_turns) <= max_chars_per_turns else e.brand_turns[:max_chars_per_turns] + " …"
+        turns = [t.strip() for t in text.split(TURN_SEP) if t.strip()]
+        if len(turns) <= 1:
+            replied = f'  {brand} replied: "{turns[0] if turns else ""}"'
+        else:
+            replied = "\n".join(f'  {brand} reply {n}: "{t}"' for n, t in enumerate(turns, start=1))
+        blocks.append(f'[E{i}] similarity {e.similarity:.2f}\n  Customer: "{e.message}"\n{replied}')
     return "\n".join(blocks)
 
 
