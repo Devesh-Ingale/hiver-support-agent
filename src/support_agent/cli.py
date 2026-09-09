@@ -75,7 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("run", help="run an agent system over the dev or test set -> outputs/runs/")
     s.add_argument("--system", required=True, choices=["main", "no_rag", "main_gemini"])
-    s.add_argument("--split", default="test", choices=["test", "dev"])
+    s.add_argument("--split", default="test", help="test | dev | candidates:<part> (e.g. candidates:dev before labels exist)")
     s.add_argument("--limit", type=int, default=None)
     s.add_argument("--seed", type=int, default=None, help="override the sampling seed (variance re-run)")
     s.add_argument("--tag", default="", help="suffix for the output file, e.g. seed7")
@@ -128,8 +128,14 @@ def _load_taxonomy(settings, which: str = "real"):
 
 
 def _load_split(settings, split: str) -> list[dict]:
+    """'test' / 'dev' read the finalised labelled sets; 'candidates:<part>' reads unlabelled candidates of
+    that sampling part (used to pre-compute dev outputs while labelling is still in progress)."""
     from .llm.batch import read_jsonl
 
+    if split.startswith("candidates:"):
+        part = split.split(":", 1)[1]
+        rows = read_jsonl(_require(settings.paths.golden / "candidates.jsonl", "run `sample` first"))
+        return [r for r in rows if r["part"] == part]
     path = _require(settings.paths.golden / f"{split}.jsonl", "run `label --finalize` after labelling")
     return read_jsonl(path)
 
@@ -335,7 +341,10 @@ def cmd_run(args, settings) -> None:
         items = items[: args.limit]
     seed = args.seed if args.seed is not None else settings.seed
     agent = _agent_for(args.system, settings, taxonomy, seed)
-    suffix = ("_" + args.split if args.split != "test" else "") + (f"_{args.tag}" if args.tag else "")
+    split_name = args.split.split(":", 1)[1] if args.split.startswith("candidates:") else args.split
+    if split_name not in ("test", "dev"):
+        sys.exit("only the test and dev parts are run through the agent")
+    suffix = ("_" + split_name if split_name != "test" else "") + (f"_{args.tag}" if args.tag else "")
     out = settings.paths.runs / f"{args.system}{suffix}.jsonl"
     rows = run_batch([{**it, "text": it["root_text"], "doc_id": str(it["root_id"])} for it in items],
                      agent.handle, out, desc=f"{args.system}/{args.split}")

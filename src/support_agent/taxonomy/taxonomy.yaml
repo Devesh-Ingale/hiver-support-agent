@@ -85,7 +85,7 @@ policy:
   good_reply:
     - engages with the specific problem the customer raised (a relevant first step, a relevant clarifying question, or a hand-off to a private channel when the account is involved)
     - is grounded in how SpotifyCares actually handled similar cases — no invented steps, links, policies or timelines
-    - is friendly, short and concrete: one clear next step, at most 280 characters, plain text, no @handles, no agent initials
+    - "is friendly, short and concrete: one clear next step, at most 280 characters, plain text, no @handles, no agent initials"
     - moves account, payment and identity matters to DM instead of discussing them in public
   never:
     - ask for passwords, payment details or other sensitive data in public (asking to DM the account email is fine)
