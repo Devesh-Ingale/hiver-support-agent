@@ -123,13 +123,30 @@ def build_threads(df: pd.DataFrame) -> pd.DataFrame:
     threads["brand"] = threads["brand"].fillna("").astype(str)
     threads["first_brand_reply"] = threads["first_brand_reply"].fillna("").astype(str)
     threads["brand_turns"] = threads["brand_turns"].fillna("").astype(str)
-    # only meaningful for customer roots: "@SpotifyCares @123 same here" is a reply to another customer
-    threads["mentions_other_customer"] = (
+    # raw flag: the customer root mentions an anonymised handle. Mostly that is the brand's *own* main
+    # account (e.g. @Spotify -> @115888), so prepare.py resolves aliases before deciding whether the
+    # tweet is really addressed to another customer.
+    threads["mentions_numeric_handle"] = (
         threads["root_inbound"] & threads["root_text"].str.contains(CUSTOMER_MENTION_RE, regex=True)
     ).astype(bool)
     lag = (threads["first_brand_reply_at"] - threads["root_created_at"]).dt.total_seconds() / 60
     threads["first_reply_lag_min"] = lag
     return threads.reset_index(drop=True)
+
+
+def brand_alias_ids(customer_roots: pd.DataFrame, min_share: float = 0.10) -> list[str]:
+    """Anonymised ids that stand for the brand itself: numeric handles mentioned in >= min_share of its roots.
+
+    The dump rewrites every non-support handle as `@<number>`; a brand's main account (@Spotify next to
+    @SpotifyCares) therefore shows up as one very frequent number. Real other-customer mentions are rare.
+    """
+    if customer_roots.empty:
+        return []
+    mentions = pd.Series([m for text in customer_roots["root_text"] for m in CUSTOMER_MENTION_RE.findall(text)])
+    if mentions.empty:
+        return []
+    counts = mentions.str.lstrip("@").value_counts()
+    return [str(i) for i, n in counts.items() if n / len(customer_roots) >= min_share]
 
 
 def build_and_save(csv_path: Path, out_path: Path, nrows: int | None = None) -> pd.DataFrame:

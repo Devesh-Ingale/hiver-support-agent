@@ -6,7 +6,7 @@ import io
 import pandas as pd
 import pytest
 
-from support_agent.data.threads import assign_roots, build_threads, load_twcs
+from support_agent.data.threads import assign_roots, brand_alias_ids, build_threads, load_twcs
 
 # Shapes covered:
 #  - thread 1: customer root (1) -> brand reply (2) -> customer (3) -> brand (4); root has two direct
@@ -63,7 +63,7 @@ def test_build_threads_shapes(tweets):
     assert t1["brand_turns"].split(" ||| ")[1].startswith("@115712 Thanks! Try a clean reinstall")
     assert t1["max_depth"] == 3
     assert t1["first_reply_lag_min"] == pytest.approx(73 / 60, abs=1e-6)  # 22:10:47 -> 22:12:00
-    assert bool(t1["mentions_other_customer"]) is False
+    assert bool(t1["mentions_numeric_handle"]) is False
 
     t10 = threads.loc[10]
     assert t10["brand"] == "SpotifyCares" and not t10["has_brand_reply"] and t10["first_brand_reply"] == ""
@@ -78,12 +78,17 @@ def test_build_threads_shapes(tweets):
     assert t40["brand"] == "" and t40["n_turns"] == 1
 
 
-def test_customer_mention_flag(tweets):
+def test_numeric_handle_flag_and_brand_aliases(tweets):
     # tweet 5 is not a root, so the flag must come from the root text only
     threads = build_threads(tweets).set_index("root_id")
-    assert not threads["mentions_other_customer"].any()
+    assert not threads["mentions_numeric_handle"].any()
     extra = tweets.copy()
     extra.loc[extra.tweet_id == 40, "text"] = "@777777 @SpotifyCares same problem as this person"
     flagged = build_threads(extra).set_index("root_id")
-    assert bool(flagged.loc[40, "mentions_other_customer"]) is True
+    assert bool(flagged.loc[40, "mentions_numeric_handle"]) is True
     assert flagged.loc[40, "brand"] == "SpotifyCares"
+    # an anonymised id that most roots mention is the brand's own main account, not a customer
+    roots = pd.DataFrame({"root_text": ["@115888 app broken"] * 15 + ["@SpotifyCares hi"] * 4 + ["@115888 @999 same"]})
+    assert brand_alias_ids(roots) == ["115888"]            # 16/20 roots mention it; @999 appears once (5 %)
+    assert brand_alias_ids(roots, min_share=0.9) == []
+    assert brand_alias_ids(pd.DataFrame({"root_text": []})) == []

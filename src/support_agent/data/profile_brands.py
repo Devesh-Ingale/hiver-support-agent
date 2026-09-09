@@ -44,7 +44,7 @@ def profile_brands(threads: pd.DataFrame, top_n: int = 15, lang_sample: int = 40
                 "median_reply_lag_min": float(replied["first_reply_lag_min"].median()) if len(replied) else np.nan,
                 "english_share": float((langs == "en").mean()),
                 "unknown_lang_share": float((langs == "unk").mean()),
-                "mentions_other_customer": float(t["mentions_other_customer"].mean()),
+                "mentions_numeric_handle": float(t["mentions_numeric_handle"].mean()),
                 "first_day": t["root_created_at"].min().date().isoformat(),
                 "last_day": t["root_created_at"].max().date().isoformat(),
             }

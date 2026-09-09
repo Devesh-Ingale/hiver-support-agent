@@ -7,6 +7,8 @@ def test_clean_text_handles_mentions_urls_and_entities():
     assert clean_text(raw) == "it&#39;s broken again <url> help".replace("&#39;", "'") or clean_text(raw) == "it&#39;s broken again <url> help"
     assert clean_text(raw, brand="SpotifyCares") == clean_text(raw, brand="spotifycares")
     assert "<brand>" in clean_text(raw, brand="SpotifyCares")
+    # the brand's anonymised main account maps to <brand> too; a genuinely other handle is dropped
+    assert clean_text("@115888 @999 app broken", brand="SpotifyCares", aliases=["115888"]) == "<brand> app broken"
 
 
 def test_content_tokens_ignore_placeholders():

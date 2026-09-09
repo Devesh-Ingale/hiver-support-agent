@@ -37,8 +37,10 @@ def make_threads(n: int = 600, seed: int = 0) -> pd.DataFrame:
             text = "@SpotifyCares 😩😩"                                   # near-empty
         elif kind < 0.90:
             text = "@SpotifyCares la aplicación se cierra cuando abro una lista de reproducción"   # non-English
-        else:
-            text = f"@SpotifyCares issue number {i} with something quite specific and unusual happening"
+        elif kind < 0.95:  # addressed to the brand's anonymised main account (@Spotify -> @115888)
+            text = f"@115888 issue number {i} with something quite specific and unusual happening"
+        else:              # genuinely mentions another customer
+            text = f"@SpotifyCares @{700000 + i} same problem as this person, issue {i}"
         replied = rng.random() < 0.85
         substantive = rng.random() < 0.5
         turns = ("@1 Sorry! Try a clean reinstall of the app /JR" if substantive else "@1 Please DM us your account email /AB") if replied else ""
@@ -47,7 +49,7 @@ def make_threads(n: int = 600, seed: int = 0) -> pd.DataFrame:
             "root_created_at": created, "orphan_root": rng.random() < 0.05, "brand": "SpotifyCares",
             "has_brand_reply": replied, "n_turns": 2 if replied else 1, "n_brand_turns": int(replied),
             "n_customer_turns": 1, "first_brand_reply": turns, "brand_turns": turns, "max_depth": int(replied),
-            "mentions_other_customer": False, "first_reply_lag_min": 12.0 if replied else np.nan,
+            "mentions_numeric_handle": "@" in text[1:], "first_reply_lag_min": 12.0 if replied else np.nan,
         })
     # a brand-initiated root and another brand's thread must be ignored
     rows.append({**rows[0], "root_id": 1, "root_inbound": False, "root_text": "@123 Hey! all sorted?", "orphan_root": False})
@@ -86,7 +88,12 @@ def test_prepare_brand_time_split_and_columns(prepared):
     assert {"lang", "near_dup_cluster", "is_cluster_representative", "n_content_tokens"} <= set(pool.columns)
     assert stats.brand_initiated_roots == 1 and stats.threads_total == 601
     assert stats.pool_near_dup_collapsed > 0 and stats.pool_english > 0
-    assert (pool["message"].str.contains("<brand>")).all()   # brand handle normalised, customer text kept
+    # @115888 is mentioned in ~5 % of roots here, below the 10 % alias threshold -> not an alias in this fixture,
+    # so those few messages keep no <brand> token; everything addressed to @SpotifyCares does
+    assert pool["message"].str.contains("<brand>").mean() > 0.9
+    assert stats.brand_alias_ids == []
+    # the other-customer flag must fire only for genuinely other handles
+    assert 0 < pool["mentions_other_customer"].mean() < 0.15
 
 
 def test_sample_golden_parts_and_disjointness(prepared):

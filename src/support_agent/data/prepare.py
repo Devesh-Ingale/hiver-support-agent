@@ -7,6 +7,7 @@ threads are truncated (brand replies missing because collection stopped).
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import asdict, dataclass
 
 import numpy as np
@@ -14,9 +15,9 @@ import pandas as pd
 from scipy.sparse.csgraph import connected_components
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from .clean import clean_text, content_tokens, detect_lang, normalize_for_dedup
+from .clean import CUSTOMER_MENTION_RE, clean_text, content_tokens, detect_lang, normalize_for_dedup
 from .tags import primary_reply_type
-from .threads import TURN_SEP
+from .threads import TURN_SEP, brand_alias_ids
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ log = logging.getLogger(__name__)
 @dataclass
 class SplitStats:
     brand: str
+    brand_alias_ids: list[str]
     threads_total: int
     customer_roots: int
     brand_initiated_roots: int
@@ -75,9 +77,14 @@ def prepare_brand(threads_all: pd.DataFrame, brand: str, golden_window_days: int
     if t.empty:
         raise ValueError(f"no threads for brand {brand!r}")
     customer = t[t["root_inbound"]].copy()
-    customer["message"] = customer["root_text"].map(lambda s: clean_text(s, brand=brand))
+    aliases = brand_alias_ids(customer)
+    alias_re = re.compile(r"@(" + "|".join(map(re.escape, aliases)) + r")\b") if aliases else None
+    customer["message"] = customer["root_text"].map(lambda s: clean_text(s, brand=brand, aliases=aliases))
     customer["n_content_tokens"] = customer["root_text"].map(lambda s: len(content_tokens(s)))
     customer["dedup_key"] = customer["root_text"].map(normalize_for_dedup)
+    # a tweet mentions *another customer* only if it carries a numeric handle that is not a brand alias
+    stripped = customer["root_text"].map(lambda s: alias_re.sub("", s) if alias_re else s)
+    customer["mentions_other_customer"] = stripped.str.contains(CUSTOMER_MENTION_RE, regex=True).astype(bool)
 
     tail_end = customer["root_created_at"].max() - pd.Timedelta(days=tail_buffer_days)
     cutoff = tail_end - pd.Timedelta(days=golden_window_days)
@@ -102,7 +109,7 @@ def prepare_brand(threads_all: pd.DataFrame, brand: str, golden_window_days: int
     pool["is_cluster_representative"] = ~pool.duplicated("near_dup_cluster", keep="first")
 
     stats = SplitStats(
-        brand=brand, threads_total=int(len(t)), customer_roots=int(len(customer)),
+        brand=brand, brand_alias_ids=aliases, threads_total=int(len(t)), customer_roots=int(len(customer)),
         brand_initiated_roots=int((~t["root_inbound"]).sum()), orphan_roots=int(customer["orphan_root"].sum()),
         cutoff=cutoff.isoformat(), tail_end=tail_end.isoformat(),
         corpus_threads=int(len(corpus)), corpus_with_substantive_reply=int(corpus["substantive"].sum()),

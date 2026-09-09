@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import html
 import re
+from collections.abc import Iterable
 
 MENTION_RE = re.compile(r"@\w+")
 CUSTOMER_MENTION_RE = re.compile(r"@\d+\b")
@@ -18,12 +19,15 @@ SIGNOFF_RE = re.compile(r"(?:^|\s)[/^~-]\s?[A-Z]{2,3}[.!]?\s*$")
 PLACEHOLDERS = {"url", "brand"}
 
 
-def clean_text(text: str, brand: str | None = None) -> str:
-    """HTML-unescape, replace URLs with <url>, the brand handle with <brand>, drop other @mentions."""
+def clean_text(text: str, brand: str | None = None, aliases: Iterable[str] | None = None) -> str:
+    """HTML-unescape, replace URLs with <url>, the brand handle (and its anonymised aliases, e.g. the
+    brand's main account rewritten as `@115888`) with <brand>, and drop every other @mention."""
     t = html.unescape(str(text))
     t = URL_RE.sub(" <url> ", t)
     if brand:
         t = re.sub(rf"@{re.escape(brand)}\b", " <brand> ", t, flags=re.I)
+    for alias in aliases or ():
+        t = re.sub(rf"@{re.escape(str(alias))}\b", " <brand> ", t)
     t = MENTION_RE.sub(" ", t)
     return WS_RE.sub(" ", t).strip()
 
