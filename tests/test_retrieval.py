@@ -60,9 +60,12 @@ def test_no_penalty_index_ranks_by_raw_similarity():
     assert res[0].doc_id == "d6" and res[0].score == pytest.approx(res[0].similarity)
 
 
-def test_customer_handles_are_stripped_from_evidence(index):
+def test_customer_handles_and_signoffs_are_stripped_from_evidence(index):
     res = index.search("charged twice premium", k=1)
     assert res[0].doc_id == "d3" and "@3" not in res[0].brand_turns and res[0].first_reply.startswith("Sorry!")
+    assert "/JR" not in res[0].brand_turns and res[0].brand_turns.endswith("we'll look")
+    res = index.search("app crashes when I open a playlist on iphone", k=1)
+    assert "/JR" not in res[0].first_reply and "https://t.co/x" in res[0].first_reply   # links stay, initials go
 
 
 def test_exclude_and_max_similarity(index):

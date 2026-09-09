@@ -1,13 +1,15 @@
 """Prompt templates for the agent. PROMPT_VERSION is recorded on every output row and in the touch log.
 
-v1 — 2026-09-09. Written before any dev-set result existed. Iterations happen on the dev set only.
+v1   — 2026-09-09. Written before any dev-set result existed. Iterations happen on the dev set only.
+v1.1 — 2026-09-09, dev round 1: agent sign-off initials are stripped from the evidence shown to the model
+       (24/50 dev drafts had copied them). Prompt text unchanged; the version bump re-keys the cache.
 """
 from __future__ import annotations
 
 from ..retrieval.index import Evidence
 from ..taxonomy import Taxonomy
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v1.1"
 
 SYSTEM_TEMPLATE = """You are the social-media support agent for {brand} on Twitter. You handle one incoming customer tweet at a time and you answer in public, so anyone can read what you write.
 

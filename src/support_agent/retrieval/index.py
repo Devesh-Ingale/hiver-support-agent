@@ -16,7 +16,7 @@ from scipy import sparse
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import normalize
 
-from ..data.clean import CUSTOMER_MENTION_RE, normalize_for_dedup
+from ..data.clean import CUSTOMER_MENTION_RE, normalize_for_dedup, strip_signoffs
 
 REQUIRED_COLUMNS = ("doc_id", "message", "brand_turns", "first_reply", "substantive", "created_at")
 
@@ -97,10 +97,11 @@ class TfidfIndex:
                 if row["_dedup_key"] in seen_keys:
                     continue
                 seen_keys.add(row["_dedup_key"])
+            # evidence shows what the brand *did*, not who signed it: customer handles and agent initials go
             results.append(Evidence(
                 doc_id=row["doc_id"], message=row["message"],
-                brand_turns=CUSTOMER_MENTION_RE.sub("", row["brand_turns"]).replace("  ", " ").strip(),
-                first_reply=CUSTOMER_MENTION_RE.sub("", row["first_reply"]).strip(),
+                brand_turns=strip_signoffs(CUSTOMER_MENTION_RE.sub("", row["brand_turns"])),
+                first_reply=strip_signoffs(CUSTOMER_MENTION_RE.sub("", row["first_reply"])),
                 substantive=bool(row["substantive"]), created_at=str(row["created_at"]),
                 similarity=float(sims[i]), score=float(scores[i]),
             ))

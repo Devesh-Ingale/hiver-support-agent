@@ -55,6 +55,8 @@ def test_check_reply_catches_each_violation():
     assert "url_not_in_evidence" not in check_reply("See https://t.co/good1.", ev).codes
     assert "agent_signoff" in check_reply("Try a reinstall and let us know /JR", ev).codes
     assert "agent_signoff" in check_reply("Try a reinstall and let us know. ^AB", ev).codes
+    assert "agent_signoff" in check_reply("Could you DM us? We'll look backstage /LO https://t.co/good1", ev).codes
+    assert "agent_signoff" not in check_reply("Try the A/B toggle and the I/O settings, then reply", ev).codes
     assert "promise" in check_reply("It will be fixed within 24 hours", ev).codes
     assert "promise" in check_reply("You'll get a full refund", ev).codes
     assert "sensitive_request_public" in check_reply("Reply with your password and card number", ev).codes

@@ -16,6 +16,15 @@ def test_content_tokens_ignore_placeholders():
     assert content_tokens("@SpotifyCares app keeps crashing https://t.co/abc") == ["app", "keeps", "crashing"]
 
 
+def test_strip_signoffs():
+    from support_agent.data.clean import strip_signoffs
+
+    assert strip_signoffs("Let us know how it goes /JR") == "Let us know how it goes"
+    assert strip_signoffs("We'll look backstage /LO https://t.co/x") == "We'll look backstage https://t.co/x"
+    assert strip_signoffs("Try the A/B toggle ^GT. Thanks!") == "Try the A/B toggle . Thanks!"
+    assert strip_signoffs("no initials here") == "no initials here"
+
+
 def test_normalize_for_dedup_collapses_variants():
     a = "@SpotifyCares Spotify is DOWN!!! https://t.co/a"
     b = "@SpotifyCares spotify is down... https://t.co/b"

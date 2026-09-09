@@ -79,6 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--limit", type=int, default=None)
     s.add_argument("--seed", type=int, default=None, help="override the sampling seed (variance re-run)")
     s.add_argument("--tag", default="", help="suffix for the output file, e.g. seed7")
+    s.add_argument("--fresh", action="store_true", help="discard an existing output file instead of resuming it")
 
     s = sub.add_parser("baselines", help="trivial + simple baselines and the human reference rows -> outputs/runs/")
     s.add_argument("--split", default="test", choices=["test", "dev"])
@@ -346,6 +347,17 @@ def cmd_run(args, settings) -> None:
         sys.exit("only the test and dev parts are run through the agent")
     suffix = ("_" + split_name if split_name != "test" else "") + (f"_{args.tag}" if args.tag else "")
     out = settings.paths.runs / f"{args.system}{suffix}.jsonl"
+    if out.exists():
+        if args.fresh:
+            out.unlink()
+        else:
+            from .agent.prompts import PROMPT_VERSION
+            from .llm.batch import read_jsonl
+
+            stale = {r.get("prompt_version") for r in read_jsonl(out) if "error" not in r} - {PROMPT_VERSION}
+            if stale:
+                sys.exit(f"{out.name} holds rows from prompt version(s) {sorted(stale)} but the code is at {PROMPT_VERSION}; "
+                         f"re-run with --fresh to recompute, or check out the matching version")
     rows = run_batch([{**it, "text": it["root_text"], "doc_id": str(it["root_id"])} for it in items],
                      agent.handle, out, desc=f"{args.system}/{args.split}")
     ok = [r for r in rows if "error" not in r]

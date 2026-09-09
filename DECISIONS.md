@@ -22,6 +22,12 @@ Every time a metric was computed on the test set, with the prompt/config version
 |---|------|-------------------|----------------|-------|
 | — | — | (no test-set computations yet) | — | — |
 
+## Dev-set iteration log
+
+| round | date | observation on dev (50 items, unlabelled or labelled as noted) | change | version |
+|---|---|---|---|---|
+| 1 | 2026-09-09 | Pre-label run of `main`: 0/50 parse failures, but 24/50 drafts copied agent initials (`/GT`, `/LO`) from the evidence; 20 were therefore routed to a human as `draft_invalid`. A sign-off followed by the DM deep-link (`… /LO https://t.co/…`) evaded the end-anchored check. Retrieval max-similarity median 0.30 (min 0.17). Median latency 22.7 s with retrieval vs 16.0 s without. | Strip agent initials from evidence text at retrieval time (they are convention, not content); make the sign-off validity check position-independent. Prompt wording unchanged. | v1 → v1.1 |
+
 ## Decisions
 
 1. **Headline system runs on a local open model (Ollama, ~4B parameters), not a hosted frontier model.** Iteration is unlimited and reproducible without any API key, which matters more here than raw quality: the assignment grades the proof, not the system. A single run of the same prompts on `gemini-3.8-flash` is reported as a "stronger model" row so the reader can see what the ceiling looks like.

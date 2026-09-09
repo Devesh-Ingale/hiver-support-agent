@@ -14,9 +14,15 @@ CUSTOMER_MENTION_RE = re.compile(r"@\d+\b")
 URL_RE = re.compile(r"https?://\S+|\bwww\.\S+|\bt\.co/\S+", re.I)
 WS_RE = re.compile(r"\s+")
 WORD_RE = re.compile(r"[A-Za-z][A-Za-z']*")
-# "... let us know! /JR" — agents sign public replies with initials; brand convention, never content
-SIGNOFF_RE = re.compile(r"(?:^|\s)[/^~-]\s?[A-Z]{2,3}[.!]?\s*$")
+# "... let us know! /JR" or "... backstage /LO https://t.co/x" — agents sign public replies with initials,
+# sometimes before a trailing link. Brand convention, never content; position-independent on purpose.
+SIGNOFF_RE = re.compile(r"(?:(?<=\s)|^)[/^~][A-Z]{2,3}(?=$|\s|[.!,;:])")
 PLACEHOLDERS = {"url", "brand"}
+
+
+def strip_signoffs(text: str) -> str:
+    """Remove agent initials such as '/JR' wherever they occur; collapse the whitespace they leave."""
+    return WS_RE.sub(" ", SIGNOFF_RE.sub("", str(text))).strip()
 
 
 def clean_text(text: str, brand: str | None = None, aliases: Iterable[str] | None = None) -> str:
@@ -39,7 +45,7 @@ def content_tokens(text: str) -> list[str]:
 
 def normalize_for_dedup(text: str) -> str:
     """Aggressive normalisation so near-identical tweets collapse (outage bursts, copy-paste templates)."""
-    t = clean_text(SIGNOFF_RE.sub("", str(text))).lower()
+    t = clean_text(strip_signoffs(text)).lower()
     t = re.sub(r"<url>|<brand>", " ", t)
     t = re.sub(r"[^a-z0-9\s]", " ", t)
     return WS_RE.sub(" ", t).strip()
