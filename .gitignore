@@ -22,3 +22,6 @@ outputs/llm_cache.sqlite*
 .idea/
 Thumbs.db
 .DS_Store
+
+# pandoc intermediate
+report/_report_with_appendix.md
