@@ -64,6 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--limit", type=int, default=None, help="stop after N items (pilot)")
     s.add_argument("--parts", default="A,B,dev", help="which sampling parts to label (round 1)")
     s.add_argument("--finalize", action="store_true", help="join labels with candidates -> data/golden/{test,dev}.jsonl")
+    s.add_argument("--review", action="store_true", help="summarise the labels so far (distributions, confidence, flags, notes)")
 
     s = sub.add_parser("index", help="build the TF-IDF retrieval index over the historical corpus")
 
@@ -246,6 +247,11 @@ def cmd_label(args, settings) -> None:
     candidates = read_jsonl(_require(settings.paths.golden / "candidates.jsonl", "run `sample` first"))
     r1_path = settings.paths.golden / "labels_round1.jsonl"
 
+    if args.review:
+        _review_labels(read_jsonl(_require(settings.paths.golden / f"labels_round{args.round}.jsonl", "nothing labelled yet")),
+                       {c["item_id"]: c for c in candidates})
+        return
+
     if args.finalize:
         labels = {r["item_id"]: r for r in read_jsonl(_require(r1_path, "label round 1 first"))}
         by_part = {"test": [], "dev": []}
@@ -279,6 +285,38 @@ def cmd_label(args, settings) -> None:
         out = settings.paths.golden / "labels_round2.jsonl"
     n = Labeller(taxonomy, todo, out, round_no=args.round).run(limit=args.limit)
     print(f"\nlabelled {n} items this session -> {out}")
+
+
+def _review_labels(labels: list[dict], candidates: dict[str, dict]) -> None:
+    """What the pilot review (and the end-of-pass sanity check) needs to see, in one screen."""
+    import statistics
+    from collections import Counter
+
+    done = [r for r in labels if not r.get("excluded")]
+    excluded = [r for r in labels if r.get("excluded")]
+    print(f"{len(labels)} labelled ({len(excluded)} excluded); parts: {dict(Counter(candidates.get(r['item_id'], {}).get('part', '?') for r in labels))}")
+    if done:
+        secs = [r.get("label_seconds") or 0 for r in done]
+        print(f"median {statistics.median(secs):.0f} s/item; total {sum(secs) / 60:.0f} min")
+        print("\nintents:")
+        for k, v in Counter(r["intent_primary"] for r in done).most_common():
+            print(f"  {v:>3}  {k}")
+        print(f"\nsecondary intents given: {sum(bool(r.get('intent_secondary')) for r in done)}")
+        print(f"escalate: {sum(r['escalate'] for r in done)}/{len(done)}; reasons: {dict(Counter(r['reason_code'] for r in done if r['escalate']))}")
+        print(f"anger: {dict(sorted(Counter(r['anger_0_2'] for r in done).items()))}; confidence: {dict(sorted(Counter(r['labeller_confidence_1_3'] for r in done).items()))}")
+        print(f"flags: {dict(Counter(f for r in done for f in r.get('quality_flags', [])))}")
+        low = [r for r in done if r["labeller_confidence_1_3"] == 1 or "ambiguous" in r.get("quality_flags", [])]
+        if low:
+            print(f"\nlow-confidence / ambiguous ({len(low)}):")
+            for r in low:
+                print(f"  - [{r['intent_primary']}{' +' + r['intent_secondary'] if r.get('intent_secondary') else ''}] "
+                      f"{candidates.get(r['item_id'], {}).get('root_text', '')[:140]!r}")
+    notes = [r for r in labels if r.get("note") or r.get("exclusion_reason")]
+    if notes:
+        print(f"\nnotes ({len(notes)}):")
+        for r in notes:
+            print(f"  - {r['item_id']} [{r.get('intent_primary') or 'excluded'}]: {r.get('note') or r.get('exclusion_reason')}"
+                  f"\n      {candidates.get(r['item_id'], {}).get('root_text', '')[:140]!r}")
 
 
 def cmd_index(args, settings) -> None:
