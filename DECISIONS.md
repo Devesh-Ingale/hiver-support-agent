@@ -1,0 +1,40 @@
+# Decision log
+
+Plain list of the non-obvious decisions, in the order they were made. Each entry says what was decided and why; where a decision was later revisited, the entry is amended rather than deleted.
+
+## Pre-registered acceptance gate (written 2026-09-09, before any model output existed)
+
+The agent is "good enough to trust" for auto-handling only if, on the frozen 200-item test set:
+
+1. Recall on **hard** escalation categories (account/PII, payment/refund, legal/safety/threat, explicit human request) ≥ 0.95, with the bootstrap 95 % lower bound ≥ 0.85.
+2. Zero hard validity violations on drafts the agent chose to auto-send (over 280 characters, URL not present in retrieved evidence, request for sensitive data in public, promise of refund/timeline/fix, fake agent sign-off, anonymised-handle artefacts).
+3. Judge pass-rate ("a brand agent would send this with at most a light edit") ≥ 70 % on auto-handled drafts.
+4. Expected cost per 100 messages (missed hard escalation = 10, missed soft = 3, unnecessary escalation = 1) below the always-escalate baseline.
+5. Automation rate is reported at the operating point where missed hard escalations ≤ 2 %.
+
+The report ends with a verdict against exactly these five conditions. They will not be edited after test-set results are seen.
+
+## Test-set touch log
+
+Every time a metric was computed on the test set, with the prompt/config version in force. Prompt iteration happens on the 50-item dev set only.
+
+| # | date | what was computed | prompt version | notes |
+|---|------|-------------------|----------------|-------|
+| — | — | (no test-set computations yet) | — | — |
+
+## Decisions
+
+1. **Headline system runs on a local open model (Ollama, ~4B parameters), not a hosted frontier model.** Iteration is unlimited and reproducible without any API key, which matters more here than raw quality: the assignment grades the proof, not the system. A single run of the same prompts on `gemini-3.8-flash` is reported as a "stronger model" row so the reader can see what the ceiling looks like.
+2. **The LLM judge is a different model family (`gemini-3.8-flash`) from the generator.** Same-family judging is known to favour its own style (self-preference). Splitting families removes that bias by construction; the remaining judge risk is measured directly by the human-agreement study.
+3. **Unit of prediction = the first inbound customer tweet of a thread.** Multi-turn handling is out of scope (see report §"what I chose not to build"). This keeps labels unambiguous and matches how a triage system first sees a message.
+4. **"Historical resolution" = all brand-side turns of the thread, not the first reply.** In this dataset the first brand reply is very often a clarifying question or a "DM us" redirect; the substance, when it exists, arrives later. Each brand turn is tagged by type (steps / link / DM-redirect / question / apology-only) so boilerplate can be down-weighted in retrieval and quantified in the report.
+5. **Retrieval is TF-IDF (word + character n-grams), not sentence embeddings.** Tweets are short and vocabulary-driven; TF-IDF is transparent, fast, and keeps the reproduction path free of a torch download. Embeddings are on the "next week" list if retrieval quality on the dev set turns out to be the bottleneck.
+6. **One structured LLM call per message, followed by a deterministic post-processor.** The model returns intent, reply, decision, reason and evidence ids in a single JSON-schema-constrained response; hard escalation rules and tweet-validity checks are plain Python. That keeps the API budget at one call per item and makes the safety-critical logic testable and easy to modify live.
+7. **The model's self-reported confidence gates nothing.** LLM confidences are poorly calibrated; "no relevant historical resolution" is a deterministic retrieval-similarity threshold tuned on the dev set. Self-reported confidence is only reported as a reliability table.
+8. **Labelled data is split into 200 test + 50 dev, and the test set is frozen (committed) before any prediction exists on it.** All prompt and threshold iteration touches only dev; the touch log above records every test-set computation.
+9. **Golden set sampling is two-part: 120 uniform-random (Part A) + 80 targeted (Part B).** Part A gives honest natural-distribution estimates; Part B (cluster floors + escalation-keyword oversample) gives per-intent support and enough escalation positives. Every table states which part it uses.
+10. **Reply quality is scored with binary checks + pass/fail + a pairwise comparison against the verbatim-retrieval baseline, not a 1–5 multi-dimension rubric.** Binary and pairwise judgments are more reliable for both LLM and human raters; 1–5 scales compress to 4s and 5s.
+11. **Escalation ground truth is a written policy applied blind by the labeller, and the same text is given to the model.** The metric therefore measures "does the system apply the policy the way a person would", which is legitimate as long as the policy is frozen before labelling and never edited after seeing test errors.
+12. **Banking77 is not used.** Its 77 banking intents do not transfer to a consumer-tech/entertainment brand's Twitter traffic; a taxonomy induced from the brand's own data is more faithful.
+
+(Entries on brand choice, taxonomy size, local-model selection, cost-matrix values and prompt versions are added as those decisions are made.)

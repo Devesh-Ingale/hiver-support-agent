@@ -1,0 +1,24 @@
+# secrets
+.env
+
+# environments
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# data that is rebuilt from Kaggle (raw ~500 MB) or from raw (interim)
+data/raw/
+data/interim/
+
+# LLM response cache (the committed outputs/*.jsonl are the artefacts of record)
+outputs/llm_cache.sqlite*
+
+# editor / OS noise
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
