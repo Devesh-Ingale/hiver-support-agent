@@ -1,0 +1,135 @@
+# SpotifyCares intent taxonomy + escalation policy.
+# v0 drafted 2026-09-09 from outputs/results/taxonomy_clusters.md (20 TF-IDF clusters over 3,000 pre-cutoff
+# customer tweets) BEFORE any model prediction or golden label existed. Frozen as v1 after a 30-item labelling
+# pilot (merges only). The same text is shown to the human labeller and given verbatim to the model.
+brand: SpotifyCares
+version: "0"
+intents:
+  - id: playback_or_app_issue
+    name: Playback or app malfunction
+    definition: Something that should work does not — songs will not play, skip or stop, the app crashes/freezes/logs the user out, downloads or offline mode fail, a device (phone, desktop, web player, console, TV, car) misbehaves.
+    examples: ["app crashes every time I open a playlist since the update", "songs keep skipping in offline mode on Android", "web player keeps making me log in over and over"]
+    edge_rules:
+      - "Songs greyed out / cannot play a specific artist -> here (malfunction), unless the content is simply not on Spotify at all -> content_request_or_availability."
+      - "Cannot log in because of the account (password, email, hacked) -> account_access_security, not here."
+    typical_action: clarifying question about device/OS, then troubleshooting steps (log out/in, reinstall, clear cache, reset offline devices)
+  - id: library_or_playlist_problem
+    name: Library, playlist or recommendation problem
+    definition: The user's own saved music, playlists, downloads count, followers, shuffle behaviour or personalised playlists (Discover Weekly, Release Radar) are wrong, missing, changed or not updating.
+    examples: ["you wiped 2900 of my saved songs", "my Discover Weekly hasn't updated", "shuffle plays the same 10 songs", "can't add songs to my playlist after 656"]
+    edge_rules:
+      - "A wish for a NEW library/playlist capability (collaborative queue, undo skip) -> feature_request_or_feedback."
+      - "Music missing everywhere on the service (not just from the user's library) -> content_request_or_availability."
+    typical_action: steps (re-sync, reinstall, check limits) or a link to a help article; account look-ups via DM
+  - id: account_access_security
+    name: Account access or security
+    definition: The user cannot get into their account or believes it is compromised — hacked, email/password changed by someone else, unknown activity, password reset not arriving, Facebook-login trouble, locked out.
+    examples: ["my premium account has been hacked and the email was changed", "not receiving the password reset email", "someone is playing songs on my account"]
+    edge_rules:
+      - "Wanting to CHANGE own username/email/country while still able to log in -> account_settings_change."
+      - "Paid but account still shows Free -> payment_billing_subscription."
+    typical_action: move to DM to verify identity and recover the account (never in public)
+  - id: account_settings_change
+    name: Account settings or profile change
+    definition: Requests to change or manage account details while access is intact — country/region, username, display name, email, linked Facebook, deleting or merging accounts, privacy/data requests.
+    examples: ["I moved to the UK and can't change my country", "can I change my username?", "how do I delete my old account"]
+    edge_rules:
+      - "If the change is blocked by a payment problem (needs a local card) it is still account_settings_change; note payment as secondary."
+    typical_action: link to the help article that explains the setting; DM when the change needs a support agent
+  - id: payment_billing_subscription
+    name: Payment, billing or subscription entitlement
+    definition: Money and plan status — charged wrongly or twice, refund requests, paid but still Free, trial/promo codes and offers, cancelling, upgrading or downgrading Premium, gift cards, pricing questions.
+    examples: ["charged twice for premium this month", "paid for premium but my account still says free", "will the $0.99 for 3 months offer come back?"]
+    edge_rules:
+      - "Family or Student plan eligibility/verification problems -> family_or_student_plan (even if a charge is mentioned); a pure charge/refund complaint stays here."
+      - "A hacked account that also mentions premium -> account_access_security (security wins)."
+    typical_action: pricing/offer questions answered publicly; anything about a specific charge or account moves to DM
+  - id: family_or_student_plan
+    name: Family or Student plan eligibility
+    definition: Joining, inviting, verifying or being removed from Premium for Family (address check, error code 600, invite links) and Student discount eligibility, verification or expiry.
+    examples: ["invited two family members but one gets error code 600", "still a student, how do I reapply for the discount?", "got kicked off my family plan"]
+    edge_rules:
+      - "Being charged the full price after a Student discount expired -> here (eligibility root cause), with payment_billing_subscription as secondary."
+    typical_action: link to the family/student help article; DM to check the account
+  - id: content_request_or_availability
+    name: Catalogue request or availability
+    definition: Asking for music, albums, podcasts or artists to be added or brought back, why something is missing or region-locked, when a release or the service itself (or HiFi) comes to a country.
+    examples: ["please add BTS's new mixtape", "why is this album not available in India?", "when is Spotify coming to Sri Lanka?"]
+    edge_rules:
+      - "Music that exists on Spotify but will not play -> playback_or_app_issue."
+      - "Requests about the APP's capabilities (not the catalogue) -> feature_request_or_feedback."
+    typical_action: explain that labels/rights holders control availability, suggest the missing-content form; acknowledge requests
+  - id: feature_request_or_feedback
+    name: Product feature request or feedback
+    definition: Wishes for new or changed app functionality or platform support (iPhone X layout, Apple Watch app, Chromecast, dark mode, lyrics, sorting) and opinions about the product or its design, positive or negative, that do not describe a malfunction.
+    examples: ["when will you update the app for iPhone X?", "we need an Apple Watch app", "the new update is ugly and slow"]
+    edge_rules:
+      - "Praise or complaints about SUPPORT STAFF or response times -> support_followup_or_complaint."
+      - "A specific reproducible malfunction -> playback_or_app_issue."
+    typical_action: thank, acknowledge, point to the community ideas board; no promises
+  - id: support_followup_or_complaint
+    name: Support follow-up or service complaint
+    definition: About the support interaction itself — chasing a reply to a DM or email, asking how to reach a person, complaining about or praising customer service, or asking for help without saying what the problem is.
+    examples: ["please reply to the DM I sent yesterday", "I need help with my account (no details)", "your customer service is non-existent", "thanks James for restoring my account"]
+    edge_rules:
+      - "If the tweet also states the actual problem, classify by the problem and use this as secondary."
+    typical_action: acknowledge, ask for details or confirm the DM will be picked up
+  - id: other_unclear
+    name: Other / unclear
+    definition: Not a support request to Spotify (jokes, memes, links with no question, talk about Spotify addressed to someone else), spam, or too little text to tell.
+    examples: ["thanks boo <url>", "nako spotify", "why doesn't anyone know this song, I want it on soundcloud or spotify"]
+    edge_rules:
+      - "If there is any recognisable request or problem aimed at Spotify, use the matching intent instead."
+    typical_action: no reply needed, or a light friendly acknowledgement
+policy:
+  good_reply:
+    - engages with the specific problem the customer raised (a relevant first step, a relevant clarifying question, or a hand-off to a private channel when the account is involved)
+    - is grounded in how SpotifyCares actually handled similar cases — no invented steps, links, policies or timelines
+    - is friendly, short and concrete: one clear next step, at most 280 characters, plain text, no @handles, no agent initials
+    - moves account, payment and identity matters to DM instead of discussing them in public
+  never:
+    - ask for passwords, payment details or other sensitive data in public (asking to DM the account email is fine)
+    - promise refunds, fixes, features, release dates or timelines
+    - invent troubleshooting steps or URLs that are not in the evidence
+    - sign as a human agent or pretend to have looked at the account
+  auto_ok:
+    - a troubleshooting step the evidence shows SpotifyCares using addresses the issue (playback, app, library, downloads)
+    - the tweet asks how to do something or whether something is available, and the evidence contains the answer or the standard "rights holders decide availability" response
+    - the tweet is praise, feedback or a feature/catalogue request that a short acknowledgement answers
+    - the tweet lacks details and the right first reply is a clarifying question (which device/OS, which song)
+  reasons:
+    - code: account_or_pii
+      tier: hard
+      description: needs account access or personal data — hacked/compromised accounts, cannot log in, password or email problems, anything an agent can only fix by looking at the account
+      patterns:
+        - '\b(hacked|hack(?:ed)? into|compromised|hijack\w*|someone (?:else )?(?:is |has )?(?:using|logged into|on|accessing|playing (?:on|from)) my account|unauthori[sz]ed|stole (?:my )?account|stolen account|changed my (?:e-?mail|password|login|username)|can.?t (?:log|sign) ?in|cannot (?:log|sign) ?in|unable to (?:log|sign) ?in|log ?in (?:issue|problem|error)|locked out|reset (?:my )?password|password reset|recover my account)\b'
+    - code: payment_refund
+      tier: hard
+      description: money — charges, refunds, double payments, failed or declined payments, cancelling a paid plan, paid but not upgraded
+      patterns:
+        - '\b(refund\w*|charged|charges|charging|double[- ]charg\w*|overcharg\w*|billed|billing|chargeback|money back|payment (?:failed|declined|issue|problem|method|not working)|paid (?:for|but|twice|again)|still (?:says|shows|on) free|cancel(?:l?ing|led)? (?:my )?(?:premium|subscription|trial|plan|membership)|unsubscribe|free trial)\b'
+    - code: legal_safety_threat
+      tier: hard
+      description: legal threats, fraud/scam accusations, safety or self-harm, harassment or discrimination, press or regulators
+      patterns:
+        - '\b(lawyer|attorney|lawsuit|sue (?:you|spotify|them)|legal action|small claims|court|police|fraud\w*|scam\w*|suicid\w*|kill myself|self[- ]harm|harass\w*|discriminat\w*|racis\w*|journalist|the press|consumer (?:rights|protection)|ombudsman|gdpr|data protection|trading standards|ftc)\b'
+    - code: explicit_human_request
+      tier: hard
+      description: the customer explicitly asks for a person, asks you to read a DM/email already sent, or says they have asked repeatedly without an answer
+      patterns:
+        - '\b(speak (?:to|with) (?:a |an )?(?:human|person|real person|someone|agent|rep|representative)|talk to (?:a |an )?(?:human|real person|agent|person|someone)|real (?:human|person)|call me|phone (?:number|call|support)|customer service number|(?:second|third|3rd|fourth|4th|fifth|5th|sixth|6th) time (?:i.?ve|i have|i.?m|im|asking|contacting|tweeting|trying)|(?:reply|respond|answer|look at|check|read) (?:to )?(?:my|the|ur|your) (?:dms?|direct messages?|e-?mail)|sent (?:you|u|y.?all) (?:guys |a |an |another )?(?:dm|direct message|e-?mail)|no (?:one|body) (?:is |has )?(?:answering|replying|responding|replied|responded|helping)|still (?:haven.?t|have not|no) (?:heard|reply|response|answer))\b'
+    - code: anger_churn
+      tier: soft
+      description: strong anger, insults or a credible threat to cancel — a human should reach out even if the issue itself is routine
+    - code: non_english
+      tier: routing
+      description: the tweet is not in English (a human or a localised team handles it)
+    - code: no_actionable_content
+      tier: routing
+      description: nothing to act on — emoji-only, link-only, or fewer than three content words
+    - code: no_relevant_resolution
+      tier: routing
+      description: no sufficiently similar historical case to ground a public reply
+    - code: draft_invalid
+      tier: routing
+      description: the drafted reply failed the validity checks and was not sent
