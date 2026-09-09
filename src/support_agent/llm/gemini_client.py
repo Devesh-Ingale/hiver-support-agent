@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import errors, types
 
+from ..config import ROOT
 from .base import LLMError, LLMResponse, QuotaExhausted
 from .rate_limit import DailyCounter, RateLimiter
 
@@ -23,7 +24,7 @@ class GeminiClient:
 
     def __init__(self, model: str, api_key: str | None = None, rpm: int = 10, daily_limit: int = 1400,
                  counter_path: Path | None = None, max_retries: int = 6):
-        load_dotenv()
+        load_dotenv(ROOT / ".env")   # explicit path: works from any cwd and from stdin/`-c` scripts
         key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         if not key:
             raise LLMError("GEMINI_API_KEY is not set (put it in .env; see .env.example)")
