@@ -14,7 +14,25 @@ cd "C:\Users\deves\Downloads\Hiver Assignment\hiver-support-agent"
 .\.venv\Scripts\python -m support_agent.cli label --finalize      # builds data/golden/test.jsonl + dev.jsonl
 ```
 
-## Per item (~40 s)
+## Per item — compact mode (default, ~15–20 s)
+
+One code per tweet, then Enter. Grammar: `<intent>[/<secondary>][e<reason>][a<0-2>][c<1-3>][f<flags>] [n:<note>]`
+
+| you type | meaning |
+|---|---|
+| `1` | intent 1, auto-handle, calm, confident |
+| `5e2` | intent 5, **escalate**, reason 2 (payment_refund) |
+| `3/9` | intent 3 with secondary intent 9 |
+| `1a2c1` | intent 1, anger 2, confidence 1 (a guess) |
+| `10fni` | intent 10, flags noise + image-only |
+| `2e1a1 n:not sure hacked vs forgot password` | escalate reason 1, anger 1, with a note |
+| `x` | exclude this item (you will be asked why) · `?` reprint the sheet · `q` quit, progress saved |
+
+Defaults when omitted: no secondary, auto (no `e`), anger 0, confidence 3, no flags, no note. Reason numbers:
+1 account_or_pii · 2 payment_refund · 3 legal_safety_threat · 4 explicit_human_request · 5 anger_churn · 6 non_english · 7 no_actionable_content.
+Flag letters: a ambiguous · m multi-intent · n noise/spam · i image/link-only · r addressed to another customer · p personal data · s sarcasm.
+
+## Per item — verbose mode (`--verbose-prompts`, ~40 s)
 
 | prompt | answer |
 |---|---|

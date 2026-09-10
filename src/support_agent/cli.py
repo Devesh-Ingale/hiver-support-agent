@@ -65,6 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--parts", default="A,B,dev", help="which sampling parts to label (round 1)")
     s.add_argument("--finalize", action="store_true", help="join labels with candidates -> data/golden/{test,dev}.jsonl")
     s.add_argument("--review", action="store_true", help="summarise the labels so far (distributions, confidence, flags, notes)")
+    s.add_argument("--verbose-prompts", action="store_true", help="ask each field separately instead of one compact code per tweet")
 
     s = sub.add_parser("index", help="build the TF-IDF retrieval index over the historical corpus")
 
@@ -283,7 +284,7 @@ def cmd_label(args, settings) -> None:
         ids = set(select_for_relabel(round1, n=args.relabel, seed=settings.seed))
         todo = [c for c in candidates if c["item_id"] in ids]
         out = settings.paths.golden / "labels_round2.jsonl"
-    n = Labeller(taxonomy, todo, out, round_no=args.round).run(limit=args.limit)
+    n = Labeller(taxonomy, todo, out, round_no=args.round, compact=not args.verbose_prompts).run(limit=args.limit)
     print(f"\nlabelled {n} items this session -> {out}")
 
 

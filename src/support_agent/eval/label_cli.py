@@ -5,6 +5,7 @@ the brand's real reply. Every label is appended immediately (resume-safe) with t
 """
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -18,6 +19,52 @@ LABELLER_REASONS = HARD_REASONS + SOFT_REASONS + ("non_english", "no_actionable_
 FLAG_KEYS = {"a": "ambiguous", "m": "multi_intent", "n": "noise_or_spam", "i": "image_only",
              "r": "reply_to_other_customer", "p": "pii_present", "s": "sarcasm"}
 
+COMPACT_HELP = ("one code per tweet:  <intent>[/<secondary>][e<reason>][a<0-2>][c<1-3>][f<flags>] [n:<note>]   "
+                "e.g.  1  ·  5e2  ·  3/9a1c2  ·  1fam n:two issues   |   x = exclude · ? = sheet · q = quit")
+
+_CODE_RE = re.compile(r"^(?P<intent>\d+)(?:/(?P<secondary>\d+))?(?P<rest>[a-z0-9\s]*)$", re.I)
+_TOKEN_RE = re.compile(r"e(?P<reason>\d)|a(?P<anger>[0-2])|c(?P<conf>[1-3])|f(?P<flags>[amnirps]+)", re.I)
+
+
+def parse_compact_code(code: str, n_intents: int) -> dict:
+    """Turn '5e2a1c2fam n:note' into label fields. Raises ValueError with a helpful message on bad input.
+
+    Grammar: intent number; optional /secondary; then any of e<reason 1-7>, a<anger 0-2>, c<confidence 1-3>,
+    f<flag letters>; an optional 'n:' starts the free-text note. Whitespace is ignored before the note.
+    """
+    code, _, note = code.partition("n:")
+    code = code.strip()
+    m = _CODE_RE.match(code)
+    if not m:
+        raise ValueError("start with the intent number, e.g. 1, 5e2, 3/9a1c2")
+    intent = int(m.group("intent"))
+    if not 1 <= intent <= n_intents:
+        raise ValueError(f"intent must be 1-{n_intents}")
+    secondary = int(m.group("secondary")) if m.group("secondary") else None
+    if secondary is not None and (not 1 <= secondary <= n_intents or secondary == intent):
+        raise ValueError(f"secondary must be 1-{n_intents} and differ from the primary")
+    rest = re.sub(r"\s+", "", m.group("rest"))
+    fields = {"intent": intent, "secondary": secondary, "reason": None, "anger": 0, "confidence": 3, "flags": []}
+    pos = 0
+    while pos < len(rest):
+        t = _TOKEN_RE.match(rest, pos)
+        if not t:
+            raise ValueError(f"cannot read {rest[pos:]!r}: use e<1-7> a<0-2> c<1-3> f<{''.join(FLAG_KEYS)}>")
+        if t.group("reason"):
+            r = int(t.group("reason"))
+            if not 1 <= r <= len(LABELLER_REASONS):
+                raise ValueError(f"reason must be 1-{len(LABELLER_REASONS)}")
+            fields["reason"] = LABELLER_REASONS[r - 1]
+        elif t.group("anger"):
+            fields["anger"] = int(t.group("anger"))
+        elif t.group("conf"):
+            fields["confidence"] = int(t.group("conf"))
+        elif t.group("flags"):
+            fields["flags"] = [FLAG_KEYS[ch] for ch in dict.fromkeys(t.group("flags").lower())]
+        pos = t.end()
+    fields["note"] = note.strip() or None
+    return fields
+
 
 class Quit(Exception):
     pass
@@ -26,7 +73,7 @@ class Quit(Exception):
 class Labeller:
     def __init__(self, taxonomy: Taxonomy, candidates: list[dict], out_path: Path, round_no: int = 1,
                  input_fn: Callable[[str], str] = input, print_fn: Callable[[str], None] = print,
-                 clock: Callable[[], float] = time.monotonic):
+                 clock: Callable[[], float] = time.monotonic, compact: bool = True):
         self.taxonomy = taxonomy
         self.candidates = candidates
         self.out_path = out_path
@@ -34,6 +81,7 @@ class Labeller:
         self._input = input_fn
         self._print = print_fn
         self._clock = clock
+        self.compact = compact
         self.intents = taxonomy.intents
 
     # -- display -------------------------------------------------------------------------------------
@@ -49,7 +97,11 @@ class Labeller:
             tier = next((r.tier for r in self.taxonomy.reasons if r.code == code), "")
             lines.append(f"  {n:>2}. {code:<24} [{tier}] {desc}")
         lines.append("FLAGS: " + "  ".join(f"{k}={v}" for k, v in FLAG_KEYS.items()))
-        lines.append("KEYS: number = choose · enter = default/none · x = exclude item · ? = show this sheet · q = quit (progress is saved)")
+        if self.compact:
+            lines.append("CODE: " + COMPACT_HELP)
+            lines.append("      defaults: no secondary · auto (no e) · anger 0 · confidence 3 · no flags · no note")
+        else:
+            lines.append("KEYS: number = choose · enter = default/none · x = exclude item · ? = show this sheet · q = quit (progress is saved)")
         lines.append("")
         lines.append(self.taxonomy.policy_markdown())
         return "\n".join(lines)
@@ -90,6 +142,24 @@ class Labeller:
             "taxonomy_version": self.taxonomy.version, "labelled_at": datetime.now(timezone.utc).isoformat(),
             "excluded": False, "exclusion_reason": None,
         }
+        if self.compact:
+            fields = self._ask_compact()
+            if fields is None:  # excluded
+                row.update(excluded=True, exclusion_reason=self._ask_text("exclusion reason"),
+                           label_seconds=round(self._clock() - t0, 1))
+                return row
+            intent_id = self.intents[fields["intent"] - 1].id
+            secondary_id = self.intents[fields["secondary"] - 1].id if fields["secondary"] else None
+            escalate = fields["reason"] is not None
+            row.update(
+                intent_primary=intent_id, intent_secondary=secondary_id, escalate=escalate,
+                reason_code=fields["reason"] or "none", anger_0_2=fields["anger"],
+                labeller_confidence_1_3=fields["confidence"], quality_flags=fields["flags"],
+                needs_reply="noise_or_spam" not in fields["flags"], note=fields["note"],
+                label_seconds=round(self._clock() - t0, 1),
+            )
+            return row
+
         primary = self._ask_intent("intent # (primary)", allow_exclude=True)
         if primary is None:  # excluded
             row.update(excluded=True, exclusion_reason=self._ask_text("exclusion reason"),
@@ -119,6 +189,17 @@ class Labeller:
             self._print(self.cheat_sheet())
             return self._prompt(text)
         return answer
+
+    def _ask_compact(self) -> dict | None:
+        """One code per tweet; None means the item is excluded."""
+        while True:
+            answer = self._prompt("code")
+            if answer.lower() == "x":
+                return None
+            try:
+                return parse_compact_code(answer, len(self.intents))
+            except ValueError as e:
+                self._print(f"    ? {e}\n    {COMPACT_HELP}")
 
     def _ask_intent(self, text: str, allow_exclude: bool = False, allow_none: bool = False) -> str | None:
         while True:

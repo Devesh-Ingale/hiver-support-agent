@@ -33,7 +33,7 @@ def test_labelling_session_resume_exclusion_and_quit(taxonomy, tmp_path):
         # item 4: quit
         "q",
     ]
-    lab = Labeller(taxonomy, CANDS, out, round_no=1, input_fn=scripted(answers), print_fn=printed.append, clock=lambda: next(ticks))
+    lab = Labeller(taxonomy, CANDS, out, round_no=1, input_fn=scripted(answers), print_fn=printed.append, clock=lambda: next(ticks), compact=False)
     n = lab.run()
     assert n == 3
     rows = read_jsonl(out)
@@ -53,14 +53,14 @@ def test_labelling_session_resume_exclusion_and_quit(taxonomy, tmp_path):
     assert not any("part" in p.split("]")[-1] and "G0001" in p for p in printed)
 
     # resume: only the unlabelled item is offered; label it fully
-    lab2 = Labeller(taxonomy, CANDS, out, round_no=1, input_fn=scripted(["4", "", "y", "7", "0", "1", "i", ""]), print_fn=printed.append)
+    lab2 = Labeller(taxonomy, CANDS, out, round_no=1, input_fn=scripted(["4", "", "y", "7", "0", "1", "i", ""]), print_fn=printed.append, compact=False)
     assert lab2.run() == 1
     rows = read_jsonl(out)
     assert len(rows) == 4 and rows[-1]["item_id"] == "G0004" and rows[-1]["reason_code"] == "no_actionable_content"
     assert rows[-1]["quality_flags"] == ["image_only"] and rows[-1]["labeller_confidence_1_3"] == 1
 
     # round 2 is independent of round 1 progress
-    lab3 = Labeller(taxonomy, CANDS[:1], out, round_no=2, input_fn=scripted(["2", "", "n", "", "", "", ""]), print_fn=printed.append)
+    lab3 = Labeller(taxonomy, CANDS[:1], out, round_no=2, input_fn=scripted(["2", "", "n", "", "", "", ""]), print_fn=printed.append, compact=False)
     assert lab3.run() == 1
     rows = read_jsonl(out)
     assert sum(r["round"] == 2 for r in rows) == 1
