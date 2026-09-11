@@ -5,7 +5,7 @@ import time
 
 import ollama
 
-from .base import LLMError, LLMResponse
+from .base import LLMError, LLMResponse, ProviderUnavailable
 
 
 class OllamaClient:
@@ -45,7 +45,9 @@ class OllamaClient:
                     raise LLMError(f"ollama {self.model}: {e2}") from e2
             else:
                 raise LLMError(f"ollama {self.model}: {e}") from e
-        except Exception as e:  # connection refused etc.
+        except Exception as e:  # connection refused, server not running, DNS...
+            if "connect" in str(e).lower() or isinstance(e, ConnectionError):
+                raise ProviderUnavailable(f"ollama {self.model}: {e}") from e
             raise LLMError(f"ollama {self.model}: {e}") from e
         latency_ms = int((time.perf_counter() - t0) * 1000)
         return LLMResponse(

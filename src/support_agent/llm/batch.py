@@ -9,7 +9,7 @@ from typing import Any
 
 from tqdm import tqdm
 
-from .base import QuotaExhausted
+from .base import ProviderUnavailable, QuotaExhausted
 
 log = logging.getLogger(__name__)
 
@@ -32,9 +32,9 @@ def run_batch(items: list[dict[str, Any]], fn: Callable[[dict[str, Any]], dict[s
               id_key: str = "item_id", desc: str = "items") -> list[dict[str, Any]]:
     """Apply fn to every item not already present in out_path; append results as they complete.
 
-    fn must return a dict containing id_key. A QuotaExhausted error stops the run cleanly (the file is
-    consistent and the next invocation resumes); any other exception is recorded as an error row so a
-    single bad item cannot kill a long run.
+    fn must return a dict containing id_key. QuotaExhausted and ProviderUnavailable stop the run cleanly
+    (the file is consistent and the next invocation resumes); any other exception is recorded as an error
+    row so a single bad item cannot kill a long run.
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
     done = {row[id_key] for row in read_jsonl(out_path)}
@@ -44,8 +44,9 @@ def run_batch(items: list[dict[str, Any]], fn: Callable[[dict[str, Any]], dict[s
         for item in tqdm(todo, desc=desc, unit="item"):
             try:
                 row = fn(item)
-            except QuotaExhausted as e:
+            except (QuotaExhausted, ProviderUnavailable) as e:
                 log.warning("stopping: %s", e)
+                print(f"\nSTOPPED: {e}", flush=True)
                 break
             except Exception as e:  # noqa: BLE001 — keep the batch alive, record the failure
                 log.exception("item %s failed", item[id_key])

@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from support_agent.llm.base import CachedLLM, LLMResponse, QuotaExhausted, parse_json_object
+from support_agent.llm.base import CachedLLM, LLMResponse, ProviderUnavailable, QuotaExhausted, parse_json_object
 from support_agent.llm.batch import read_jsonl, run_batch
 from support_agent.llm.cache import ResponseCache
 from support_agent.llm.rate_limit import DailyCounter, RateLimiter
@@ -82,3 +82,13 @@ def test_run_batch_resumes_and_survives_errors(tmp_path):
     rows = run_batch(items, lambda it: (calls.append(it["item_id"]), {"item_id": it["item_id"], "ok": True})[1], out)
     assert calls == [4]                                            # only the missing item is re-run
     assert len(rows) == 5 and read_jsonl(out) == rows
+
+
+def test_run_batch_stops_when_provider_is_down(tmp_path):
+    out = tmp_path / "down.jsonl"
+
+    def fn(item):
+        raise ProviderUnavailable("ollama: Failed to connect")
+
+    rows = run_batch([{"item_id": i} for i in range(5)], fn, out)
+    assert rows == [] and read_jsonl(out) == []                    # no error rows written, nothing to clean up

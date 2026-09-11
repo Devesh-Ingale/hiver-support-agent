@@ -17,6 +17,10 @@ class QuotaExhausted(LLMError):
     """Daily call budget reached — stop cleanly so the run can resume tomorrow."""
 
 
+class ProviderUnavailable(LLMError):
+    """The provider cannot be reached at all (server down, no network) — stop the run instead of failing every item."""
+
+
 @dataclass
 class LLMResponse:
     text: str
