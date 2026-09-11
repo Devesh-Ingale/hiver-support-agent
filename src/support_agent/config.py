@@ -43,6 +43,7 @@ class Settings:
     # models
     local_model: str = "qwen3:4b-instruct"
     judge_model: str = "gemini-3.8-flash"
+    gemini_agent_model: str = "gemini-3.1-flash-lite"   # the hosted-model comparison row; must differ from the judge
     gemini_rpm: int = 10                 # free-tier default; raise if AI Studio shows more
     # retrieval / agent
     retrieval_k: int = 5

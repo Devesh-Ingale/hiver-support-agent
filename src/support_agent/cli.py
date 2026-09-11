@@ -355,7 +355,12 @@ def _agent_for(system: str, settings, taxonomy, seed: int):
 
     use_retrieval = system != "no_rag"
     index = TfidfIndex.load(_require(_processed(settings, "index.joblib"), "run `index` first")) if use_retrieval else None
-    llm = make_client("gemini" if system == "main_gemini" else "local", settings)
+    if system == "main_gemini":
+        if settings.gemini_agent_model == settings.judge_model:
+            sys.exit("gemini_agent_model must differ from judge_model, otherwise the judge would score its own drafts")
+        llm = make_client("gemini", settings, model=settings.gemini_agent_model)
+    else:
+        llm = make_client("local", settings)
     config = AgentConfig(system=system, use_retrieval=use_retrieval, k=settings.retrieval_k,
                          min_similarity=settings.min_retrieval_similarity, max_reply_chars=settings.max_reply_chars, seed=seed)
     return Agent(llm, taxonomy, config, index=index)
