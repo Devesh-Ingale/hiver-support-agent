@@ -101,7 +101,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--systems", default="main,simple,trivial_escalate,no_rag")
     s.add_argument("--other", default="simple", help="pairs: the system compared against main")
 
-    sub.add_parser("eval", help="recompute every metric from committed outputs -> outputs/results/{metrics.json,tables.md}")
+    s = sub.add_parser("eval", help="recompute every metric from committed outputs -> outputs/results/{metrics.json,tables.md}")
+    s.add_argument("--split", default="test", choices=["test", "dev"], help="dev: iteration numbers from *_dev runs (never the headline)")
 
     sub.add_parser("figures", help="render report figures -> report/figures/*.png")
     sub.add_parser("docx", help="render REPORT.md (+ decision-log appendix) -> report/report.docx via pandoc")
@@ -554,8 +555,11 @@ def cmd_rate(args, settings) -> None:
 
 
 def cmd_eval(args, settings) -> None:
-    from .eval.run_eval import evaluate
+    from .eval.run_eval import evaluate, evaluate_dev
 
+    if args.split == "dev":
+        print(evaluate_dev(settings))
+        return
     evaluate(settings)
     print((settings.paths.results / "tables.md").read_text(encoding="utf-8"))
     print(f"full metrics -> {settings.paths.results / 'metrics.json'}")

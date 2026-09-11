@@ -319,6 +319,56 @@ def paired_comparisons(test: list[dict], runs: dict[str, dict[str, dict]]) -> di
     return out
 
 
+def evaluate_dev(settings: Settings) -> str:
+    """Dev-set numbers for prompt/threshold iteration: label-based metrics only, printed, never the headline.
+
+    Reads data/golden/dev.jsonl and outputs/runs/*_dev.jsonl. Also sweeps the 'no relevant resolution'
+    similarity floor for `main` so the value frozen in settings.yaml is chosen on dev, not test.
+    """
+    paths = settings.paths
+    dev = read_jsonl(paths.golden / "dev.jsonl")
+    if not dev:
+        raise FileNotFoundError("data/golden/dev.jsonl is missing — run `label --finalize` first")
+    labels = sorted({t["intent_primary"] for t in dev})
+    costs = CostMatrix(settings.cost_missed_hard, settings.cost_missed_soft, settings.cost_unnecessary_escalation)
+    lines = [f"# Dev set (n={len(dev)}) — iteration numbers, not the headline", ""]
+    lines.append("label distribution: " + ", ".join(f"{k}={v}" for k, v in pd.Series([t["intent_primary"] for t in dev]).value_counts().items()))
+    lines.append("escalation labels: " + ", ".join(f"{k}={v}" for k, v in pd.Series([t["reason_code"] for t in dev]).value_counts().items()))
+    lines.append("")
+    for path in sorted(paths.runs.glob("*_dev.jsonl")):
+        rows = {r["item_id"]: r for r in read_jsonl(path) if "error" not in r}
+        system = path.stem[: -len("_dev")]
+        b = system_block(dev, rows, labels, costs)
+        if not b.get("n"):
+            continue
+        it, esc = b.get("intent") or {}, b["escalation"]
+        versions = sorted({(r.get("prompt_version"), r.get("taxonomy_version")) for r in rows.values()})
+        lines.append(f"## {system}  (n={b['n']}, versions {versions})")
+        lines.append(f"- intent accuracy {_pct(it.get('accuracy'))} · lenient {_pct(it.get('accuracy_lenient'))} · macro-F1 {_num((it.get('macro_f1') or {}).get('value'))}")
+        lines.append(f"- escalation P/R/F1 {_num(esc.get('precision'), '{:.2f}')}/{_num(esc.get('recall'), '{:.2f}')}/{_num(esc.get('f1'), '{:.2f}')} · hard recall {_pct(esc.get('hard_recall'))} (n_hard={esc.get('n_hard')}) · "
+                     f"automation {_pct(esc.get('automation_rate'))} · cost/100 {_num(esc.get('expected_cost_per_100', {}).get('value'), '{:.0f}')} · missed hard {esc.get('missed_hard_rate', 0):.1%}")
+        lines.append(f"- reason-code agreement (both escalated): exact {_num(esc['reason_agreement'].get('exact_match'), '{:.2f}')} on n={esc['reason_agreement'].get('n_both_escalated')}")
+        lines.append(f"- raw-draft violations {b['violations_raw_draft']} · forced by rule {b['forced_by_rule']} · parse failures {b['parse_failure_rate']:.1%}")
+        if it.get("per_class"):
+            worst = sorted(it["per_class"], key=lambda r: r["f1"])[:3]
+            lines.append("- weakest intents: " + "; ".join(f"{w['intent']} F1 {w['f1']:.2f} (n={w['support']})" for w in worst))
+            cm = it["confusion"]
+            off = [(cm.index[i], cm.columns[j], int(cm.values[i, j])) for i in range(len(cm)) for j in range(len(cm)) if i != j and cm.values[i, j] >= 2]
+            if off:
+                lines.append("- confusions ≥2: " + "; ".join(f"{a}→{p} ×{n}" for a, p, n in sorted(off, key=lambda x: -x[2])))
+        if system == "main":
+            op = operating_block(dev, rows)
+            curve = op["curve"]
+            lines.append("- similarity-floor sweep (threshold → automation, missed-hard): " + "; ".join(
+                f"{r.threshold:.2f}→{r.automation_rate:.0%},{r.missed_hard_rate:.1%}" for r in curve.iloc[::10].itertuples()))
+            lines.append(f"- best floor at ≤2 % missed hard: {op['best_at_budget']}")
+        lines.append("")
+    text = "\n".join(lines)
+    paths.results.mkdir(parents=True, exist_ok=True)
+    (paths.results / "dev_metrics.md").write_text(text, encoding="utf-8")
+    return text
+
+
 def auto_sent_violations(test: list[dict], rows: dict[str, dict]) -> int:
     items, preds = _aligned(test, rows)
     return int(sum(1 for p in preds if p["decision"] == "auto" and p.get("violations")))
