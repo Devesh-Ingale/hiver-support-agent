@@ -406,10 +406,11 @@ def cmd_run(args, settings) -> None:
             from .agent.prompts import PROMPT_VERSION
             from .llm.batch import read_jsonl
 
-            stale = {r.get("prompt_version") for r in read_jsonl(out) if "error" not in r} - {PROMPT_VERSION}
+            existing = [r for r in read_jsonl(out) if "error" not in r]
+            stale = {(r.get("prompt_version"), r.get("taxonomy_version")) for r in existing} - {(PROMPT_VERSION, taxonomy.version)}
             if stale:
-                sys.exit(f"{out.name} holds rows from prompt version(s) {sorted(stale)} but the code is at {PROMPT_VERSION}; "
-                         f"re-run with --fresh to recompute, or check out the matching version")
+                sys.exit(f"{out.name} holds rows from (prompt, taxonomy) version(s) {sorted(map(str, stale))} but the code is at "
+                         f"({PROMPT_VERSION}, {taxonomy.version}); re-run with --fresh to recompute, or check out the matching version")
     rows = run_batch([{**it, "text": it["root_text"], "doc_id": str(it["root_id"])} for it in items],
                      agent.handle, out, desc=f"{args.system}/{args.split}")
     ok = [r for r in rows if "error" not in r]

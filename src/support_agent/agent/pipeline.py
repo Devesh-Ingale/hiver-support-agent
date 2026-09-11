@@ -69,6 +69,7 @@ class Agent:
             "provider": self.llm.provider,
             "model": self.llm.model,
             "prompt_version": prompts.PROMPT_VERSION,
+            "taxonomy_version": self.taxonomy.version,
             "text": message,
             "lang": lang,
             # final (policy-applied) answer
