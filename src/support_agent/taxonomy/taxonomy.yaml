@@ -3,7 +3,7 @@
 # customer tweets) BEFORE any model prediction or golden label existed. Frozen as v1 after a 30-item labelling
 # pilot (merges only). The same text is shown to the human labeller and given verbatim to the model.
 brand: SpotifyCares
-version: "0"
+version: "1"   # frozen 2026-09-11 after the labelling pilot (41 items): two clarifications, no merges
 intents:
   - id: playback_or_app_issue
     name: Playback or app malfunction
@@ -49,19 +49,20 @@ intents:
     definition: Joining, inviting, verifying or being removed from Premium for Family (address check, error code 600, invite links) and Student discount eligibility, verification or expiry.
     examples: ["invited two family members but one gets error code 600", "still a student, how do I reapply for the discount?", "got kicked off my family plan"]
     edge_rules:
-      - "Being charged the full price after a Student discount expired -> here (eligibility root cause), with payment_billing_subscription as secondary."
+      - "Being charged the full price because a Student discount expired or could not be verified -> here (eligibility root cause), with payment_billing_subscription as secondary."
+      - "Being charged TWICE (Premium and the student price at once) is a billing error -> payment_billing_subscription, with this intent as secondary."
     typical_action: link to the family/student help article; DM to check the account
   - id: content_request_or_availability
     name: Catalogue request or availability
-    definition: Asking for music, albums, podcasts or artists to be added or brought back, why something is missing or region-locked, when a release or the service itself (or HiFi) comes to a country.
+    definition: Asking for music, albums, podcasts or artists to be added or brought back, why something is missing or region-locked, artist/album metadata fixes, or when a release or the service itself comes to a country.
     examples: ["please add BTS's new mixtape", "why is this album not available in India?", "when is Spotify coming to Sri Lanka?"]
     edge_rules:
       - "Music that exists on Spotify but will not play -> playback_or_app_issue."
-      - "Requests about the APP's capabilities (not the catalogue) -> feature_request_or_feedback."
+      - "Requests about the APP or the PRODUCT (a HiFi tier, a new feature) -> feature_request_or_feedback; only the catalogue and where the service is offered belong here."
     typical_action: explain that labels/rights holders control availability, suggest the missing-content form; acknowledge requests
   - id: feature_request_or_feedback
     name: Product feature request or feedback
-    definition: Wishes for new or changed app functionality or platform support (iPhone X layout, Apple Watch app, Chromecast, dark mode, lyrics, sorting) and opinions about the product or its design, positive or negative, that do not describe a malfunction.
+    definition: Wishes for new or changed app functionality, product tiers or platform support (iPhone X layout, Apple Watch app, Chromecast, a HiFi tier, dark mode, lyrics, sorting) and opinions about the product or its design, positive or negative, that do not describe a malfunction.
     examples: ["when will you update the app for iPhone X?", "we need an Apple Watch app", "the new update is ugly and slow"]
     edge_rules:
       - "Praise or complaints about SUPPORT STAFF or response times -> support_followup_or_complaint."

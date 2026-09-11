@@ -66,6 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--finalize", action="store_true", help="join labels with candidates -> data/golden/{test,dev}.jsonl")
     s.add_argument("--review", action="store_true", help="summarise the labels so far (distributions, confidence, flags, notes)")
     s.add_argument("--verbose-prompts", action="store_true", help="ask each field separately instead of one compact code per tweet")
+    s.add_argument("--redo", default="", help="comma-separated item ids to drop from this round's labels and label again (pilot corrections)")
 
     s = sub.add_parser("index", help="build the TF-IDF retrieval index over the historical corpus")
 
@@ -273,6 +274,18 @@ def cmd_label(args, settings) -> None:
             agg = self_agreement(read_jsonl(r1_path), read_jsonl(r2_path))
             (settings.paths.golden / "self_agreement.json").write_text(json.dumps(agg, indent=2, default=str), encoding="utf-8")
             print("self-agreement:", json.dumps(agg, indent=2, default=str))
+        return
+
+    if args.redo:
+        redo_ids = {i.strip() for i in args.redo.split(",") if i.strip()}
+        out = settings.paths.golden / f"labels_round{args.round}.jsonl"
+        existing = read_jsonl(out)
+        kept = [r for r in existing if r["item_id"] not in redo_ids]
+        write_jsonl(out, kept)
+        print(f"dropped {len(existing) - len(kept)} label(s) for re-entry: {sorted(redo_ids)}")
+        todo = [c for c in candidates if c["item_id"] in redo_ids]
+        n = Labeller(taxonomy, todo, out, round_no=args.round, compact=not args.verbose_prompts).run()
+        print(f"\nre-labelled {n} item(s) -> {out}")
         return
 
     if args.round == 1:

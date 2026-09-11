@@ -1,2 +1,3 @@
 brand: SpotifyCares
 judge_model: gemini-3.5-flash-lite
+gemini_rpm: 14
