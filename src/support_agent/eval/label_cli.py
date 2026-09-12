@@ -66,6 +66,27 @@ def parse_compact_code(code: str, n_intents: int) -> dict:
     return fields
 
 
+def build_label_row(taxonomy: Taxonomy, cand: dict, fields: dict, round_no: int, seconds: float, labeller: str = "author",
+                    extra: dict | None = None) -> dict:
+    """The stored label row for parsed compact-code fields. `labeller` says who decided: author | assistant."""
+    intents = taxonomy.intents
+    intent_id = intents[fields["intent"] - 1].id
+    secondary_id = intents[fields["secondary"] - 1].id if fields.get("secondary") else None
+    escalate = fields.get("reason") is not None
+    row = {
+        "item_id": cand["item_id"], "root_id": cand.get("root_id"), "round": round_no, "taxonomy_version": taxonomy.version,
+        "labelled_at": datetime.now(timezone.utc).isoformat(), "labeller": labeller, "excluded": False, "exclusion_reason": None,
+        "intent_primary": intent_id, "intent_secondary": secondary_id, "escalate": escalate,
+        "reason_code": fields.get("reason") or "none", "anger_0_2": fields.get("anger", 0),
+        "labeller_confidence_1_3": fields.get("confidence", 3), "quality_flags": fields.get("flags", []),
+        "needs_reply": "noise_or_spam" not in fields.get("flags", []), "note": fields.get("note"),
+        "label_seconds": round(seconds, 1),
+    }
+    if extra:
+        row.update(extra)
+    return row
+
+
 class Quit(Exception):
     pass
 
@@ -156,21 +177,12 @@ class Labeller:
                 row.update(excluded=True, exclusion_reason=self._ask_text("exclusion reason"),
                            label_seconds=round(self._clock() - t0, 1))
                 return row
-            intent_id = self.intents[fields["intent"] - 1].id
-            secondary_id = self.intents[fields["secondary"] - 1].id if fields["secondary"] else None
-            escalate = fields["reason"] is not None
-            row.update(
-                intent_primary=intent_id, intent_secondary=secondary_id, escalate=escalate,
-                reason_code=fields["reason"] or "none", anger_0_2=fields["anger"],
-                labeller_confidence_1_3=fields["confidence"], quality_flags=fields["flags"],
-                needs_reply="noise_or_spam" not in fields["flags"], note=fields["note"],
-                label_seconds=round(self._clock() - t0, 1),
-            )
+            extra = None
             if proposal:
-                row.update(assisted=True, accepted_proposal=fields.get("accepted_default", False),
-                           proposal_a=proposal["a"], proposal_b=proposal["b"],
-                           models_agree_intent=proposal["agree_intent"], models_agree_escalate=proposal["agree_escalate"])
-            return row
+                extra = {"assisted": True, "accepted_proposal": fields.get("accepted_default", False),
+                         "proposal_a": proposal["a"], "proposal_b": proposal["b"],
+                         "models_agree_intent": proposal["agree_intent"], "models_agree_escalate": proposal["agree_escalate"]}
+            return build_label_row(self.taxonomy, cand, fields, self.round_no, self._clock() - t0, labeller="author", extra=extra)
 
         primary = self._ask_intent("intent # (primary)", allow_exclude=True)
         if primary is None:  # excluded

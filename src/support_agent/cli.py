@@ -69,6 +69,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--redo", default="", help="comma-separated item ids to drop from this round's labels and label again (pilot corrections)")
     s.add_argument("--propose", action="store_true", help="generate model proposals for the unlabelled items -> data/golden/proposals.jsonl (2 models)")
     s.add_argument("--blind", action="store_true", help="ignore proposals.jsonl and label blind even if it exists")
+    s.add_argument("--apply-proposals", action="store_true",
+                   help="AI-assistant labelling: accept agreed proposals, apply adjudications from --decisions for the rest (recorded as labeller=assistant)")
+    s.add_argument("--decisions", default="", help="JSON {item_id: compact code} of assistant adjudications used by --apply-proposals")
 
     s = sub.add_parser("index", help="build the TF-IDF retrieval index over the historical corpus")
 
@@ -262,6 +265,39 @@ def cmd_label(args, settings) -> None:
             from .eval.proposals import proposal_accuracy
 
             print("\nproposal accuracy vs BLIND human labels:", json.dumps(proposal_accuracy(proposals, read_jsonl(r1_path)), indent=1))
+        return
+
+    if args.apply_proposals:
+        from .eval.label_cli import Labeller, build_label_row, parse_compact_code
+        from .llm.batch import write_jsonl
+
+        if not proposals:
+            sys.exit("no proposals.jsonl — run `label --propose` first")
+        decisions = json.loads(Path(args.decisions).read_text(encoding="utf-8")) if args.decisions else {}
+        existing = read_jsonl(r1_path) if r1_path.exists() else []
+        done = {r["item_id"] for r in existing}
+        helper = Labeller(taxonomy, [], r1_path)
+        new_rows, skipped, sources = [], [], {}
+        for c in candidates:
+            if c["part"] not in ("A", "B", "dev") or c["item_id"] in done or c["item_id"] not in proposals:
+                continue
+            p = proposals[c["item_id"]]
+            code_a, code_b = helper.proposal_code(p["a"]), helper.proposal_code(p["b"])
+            if c["item_id"] in decisions:
+                code, source = decisions[c["item_id"]], "assistant_adjudicated"
+            elif code_a and code_a == code_b:
+                code, source = code_a, "proposals_agreed"
+            else:
+                skipped.append(c["item_id"])
+                continue
+            fields = parse_compact_code(code, len(taxonomy.intents))
+            extra = {"assisted": True, "accepted_proposal": source == "proposals_agreed", "label_source": source,
+                     "proposal_a": p["a"], "proposal_b": p["b"], "models_agree_intent": p["agree_intent"], "models_agree_escalate": p["agree_escalate"]}
+            new_rows.append(build_label_row(taxonomy, c, fields, 1, 0.0, labeller="assistant", extra=extra))
+            sources[source] = sources.get(source, 0) + 1
+        write_jsonl(r1_path, existing + new_rows)
+        print(f"wrote {len(new_rows)} assistant labels ({sources}); {len(done)} pre-existing kept; "
+              f"{len(skipped)} items still need an adjudication: {skipped[:20]}{' …' if len(skipped) > 20 else ''}")
         return
 
     if args.propose:
