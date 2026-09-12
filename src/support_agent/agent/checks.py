@@ -27,6 +27,19 @@ SENSITIVE_RE = re.compile(
     re.I,
 )
 DM_CONTEXT_RE = re.compile(r"\b(dm|direct message|private message|privately)\b", re.I)
+# The draft itself hands the customer to a private channel ("DM us your account email") — under the policy
+# that is the escalation case (a human takes over in the DM), whatever the model called it.
+HANDOFF_RE = re.compile(
+    r"\b(dm (?:us|me)|send (?:us|me) a (?:dm|direct message|private message)|(?:via|in|over|through) (?:a )?(?:dm|direct message)|"
+    r"dm(?:ing)? us|message us (?:privately|directly)|drop us a (?:dm|message)|shoot us a (?:dm|message)|"
+    r"(?:reach out|get in touch) (?:to us )?(?:via|in|by|over) dm|(?:hit|slide into) our dms?|take this to dm)\b",
+    re.I,
+)
+PAYMENT_INTENT_HINT = ("payment", "billing", "subscription", "student", "family")
+
+
+def drafts_handoff(reply: str) -> bool:
+    return bool(HANDOFF_RE.search(reply or ""))
 # "We've already replied to your DM" — the agent has not looked at anything; claiming past action is a lie
 CLAIMS_ACTION_RE = re.compile(
     r"\b(we(?:'ve| have) (?:already |just |now )?(?:replied|responded|answered|sent|looked|checked|fixed|resolved|refunded|"
@@ -131,6 +144,9 @@ def post_process(output: AgentOutput, message: str, *, lang: str, evidence_texts
             forced = "no_relevant_resolution"
         elif output.decision == "auto" and violations:
             forced = "draft_invalid"
+        elif output.decision == "auto" and drafts_handoff(output.reply):
+            # "Can you DM us your account email?" called `auto`: the hand-off IS the escalation
+            forced = "payment_refund" if any(h in output.intent for h in PAYMENT_INTENT_HINT) else "account_or_pii"
 
     if forced:
         # a model that already escalated for a substantive reason keeps its reason; we only add caution —
@@ -144,12 +160,15 @@ def post_process(output: AgentOutput, message: str, *, lang: str, evidence_texts
         })
     # an escalation the model made with reason_code "none" is left as-is: metrics count it as "unspecified"
 
-    return PostProcessResult(output=output, model_decision=model_decision, forced_reason=forced,
+    handoff = model_decision == "auto" and forced in ("account_or_pii", "payment_refund") and drafts_handoff(output.reply) and not hard_rules.match(message)
+    return PostProcessResult(output=output, model_decision=model_decision, forced_reason="dm_handoff" if handoff else forced,
                              violations=violations.codes, retrieval_max_sim=retrieval_max_sim)
 
 
 def _describe(code: str, violations: Violations) -> str:
     return {
+        "account_or_pii": "the draft hands the customer to DM to check their account; a human takes over there",
+        "payment_refund": "the draft hands the customer to DM about a payment matter; a human takes over there",
         "non_english": "message is not in English; routed to a human",
         "no_actionable_content": "message has no actionable text (image-only or empty); a human should look",
         "no_relevant_resolution": "no sufficiently similar historical resolution found; routed to a human",

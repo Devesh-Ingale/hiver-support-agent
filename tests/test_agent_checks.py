@@ -115,6 +115,22 @@ def test_post_process_invalid_draft_is_not_sent():
     assert "url_not_in_evidence" in r.output.reason
 
 
+def test_post_process_drafted_handoff_is_an_escalation():
+    out = make_output(intent="account_settings_change", reply="Hey! To change your country, could you DM us your account's email? We'll take a look backstage.")
+    r = run(out, "I moved to Vietnam and cannot change my country setting, it only shows US")
+    assert r.output.decision == "escalate" and r.output.reason_code == "account_or_pii" and r.forced_reason == "dm_handoff"
+    assert "hands the customer to DM" in r.output.reason
+    out = make_output(intent="payment_billing", reply="Sorry about that! Send us a DM with the email on the account and we'll check the charge.")
+    r = run(out, "I think the amount taken this month is wrong")   # no hard-rule keyword, so the hand-off rule decides
+    assert r.output.decision == "escalate" and r.output.reason_code == "payment_refund" and r.forced_reason == "dm_handoff"
+    # a public troubleshooting reply is not a hand-off
+    r = run(make_output(reply="Try logging out and back in, then restart the app."), "the app crashes when I open a playlist")
+    assert r.output.decision == "auto" and r.forced_reason is None
+    # the model already escalating is left alone (no double counting as dm_handoff)
+    r = run(make_output(decision="escalate", reason_code="account_or_pii", reply="Could you DM us your email?"), "cannot change my country")
+    assert r.forced_reason is None and r.output.reason_code == "account_or_pii"
+
+
 def test_post_process_clean_auto_passes_through():
     r = run(make_output(), "the app crashes when I open a playlist")
     assert r.output.decision == "auto" and r.forced_reason is None and r.violations == []

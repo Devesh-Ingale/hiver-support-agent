@@ -63,6 +63,10 @@ def test_simple_rows_and_human_reference(taxonomy):
     by = {r["item_id"]: r for r in rows}
     assert by["G1"]["decision"] == "auto" and by["G1"]["reply"].startswith("Sorry! Try a clean reinstall") and by["G1"]["violations"] == []
     assert by["G2"]["decision"] == "escalate" and by["G2"]["reason_code"] == "payment_refund" and by["G2"]["evidence"][0]["doc_id"] == "d2"
+    # a verbatim "DM us" neighbour reply with no hard-rule keyword in the tweet is still an escalation
+    handoff_rows = simple_rows([{"item_id": "G9", "root_id": 9, "root_text": "@SpotifyCares something is off with my premium account, can you check?", "lang": "en"}],
+                               ["payment_billing"], [0.7], index(), taxonomy.hard_rules(), "SpotifyCares")
+    assert handoff_rows[0]["reply"].startswith("Please DM us") and handoff_rows[0]["decision"] == "escalate" and handoff_rows[0]["reason_code"] == "payment_refund"
     assert by["G3"]["reason_code"] == "no_actionable_content" and by["G4"]["reason_code"] == "non_english"
     assert all(r["system"] == "simple" and r["intent"] for r in rows)
     ref = human_reference_rows(ITEMS)

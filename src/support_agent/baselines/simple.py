@@ -17,7 +17,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import KFold, StratifiedKFold
 from sklearn.pipeline import make_pipeline
 
-from ..agent.checks import HardRules
+from ..agent.checks import HardRules, drafts_handoff
 from ..data.clean import SIGNOFF_RE, clean_text, content_tokens
 from ..retrieval.index import TfidfIndex
 from .rows import make_row
@@ -84,6 +84,10 @@ def simple_rows(items: list[dict], intents: list[str], confidences: list[float],
         text = item["root_text"]
         reply, top, sim = verbatim_reply(text, index, brand, exclude_ids={str(item.get("root_id", ""))})
         decision, code, reason = rule_decision(text, item.get("lang"), hard_rules)
+        if decision == "auto" and drafts_handoff(reply):
+            # same deterministic layer as the agent: a verbatim "DM us" reply is a hand-off, i.e. an escalation
+            decision, code, reason = "escalate", ("payment_refund" if "payment" in intent or "family" in intent else "account_or_pii"), \
+                "rule: the nearest historical reply hands the customer to DM"
         evidence = [top.to_dict()] if top else []
         rows.append(make_row(
             item, system="simple", provider="rule", model="tfidf-logreg+knn", intent=intent, reply=reply,
