@@ -64,7 +64,7 @@ TODO — real examples, frequency, hypothesis for each. Candidates seen on dev a
 
 ## 8. What is misleading about my headline number?
 
-TODO — every point quantified: brand selection bias; single-author labels/policy/rubric; N and interval widths; 2-week 2017 slice with dedup and oversampling; "grounded" ≠ correct (no outcomes, dead links); judge κ and self-consistency; escalation recall from trivial classes; test-set touch count; first-tweet only; recurring vs novel gap; run variance; verbatim baseline inside the CI where true; filtering vs real inbound junk.
+TODO — every point quantified: brand selection bias; single-author labels/policy/rubric; **209 of 250 labels were model-assisted (two proposers, neither the system under test; author accepted X % of proposals; proposer accuracy vs the 41 blind labels was Y %) — accuracy on items where the proposers agreed vs disagreed is reported separately**; N and interval widths; 2-week 2017 slice with dedup and oversampling; "grounded" ≠ correct (no outcomes, dead links); judge κ and self-consistency; escalation recall from trivial classes; test-set touch count; first-tweet only; recurring vs novel gap; run variance; verbatim baseline inside the CI where true; filtering vs real inbound junk.
 
 ## 9. Verdict against the acceptance gate
 
