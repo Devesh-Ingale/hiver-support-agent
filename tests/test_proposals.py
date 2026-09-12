@@ -69,5 +69,6 @@ def test_assisted_labelling_accept_and_override(taxonomy, tmp_path):
     assert r2["models_agree_intent"] is False and r2["note"] == "took A but angrier"
     assert "assisted" not in r3 and r3["intent_primary"] == "other_unclear"
     assert any("both models agree" in p for p in printed) and any("⚠ models disagree on intent" in p for p in printed)
-    assert lab.proposal_code(a2) == "2e2a1"   # test taxonomy: payment_billing is intent 2 and lab.proposal_code(agree) == "1"
+    assert lab.proposal_code(a2) == "2e2a1"   # test taxonomy: payment_billing is intent 2
+    assert lab.proposal_code(agree) == "1"
     assert lab.proposal_code({**a2, "reason_code": None}) is None
