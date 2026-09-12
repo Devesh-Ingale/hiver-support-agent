@@ -53,8 +53,8 @@ def _df(obj) -> pd.DataFrame:
     return pd.DataFrame(obj["data"], index=obj["index"], columns=obj["columns"])
 
 
-def _pct_axis(ax, axis: str = "x") -> None:
-    fmt = matplotlib.ticker.PercentFormatter(1.0, decimals=0)
+def _pct_axis(ax, axis: str = "x", decimals: int = 0) -> None:
+    fmt = matplotlib.ticker.PercentFormatter(1.0, decimals=decimals)
     (ax.xaxis if axis == "x" else ax.yaxis).set_major_formatter(fmt)
 
 
@@ -145,7 +145,7 @@ def fig_operating_curve(curve: pd.DataFrame, best: dict, path: Path, budget: flo
                     (best["missed_hard_rate"], best["automation_rate"]), xytext=(10, -22), textcoords="offset points",
                     fontsize=8.5, color=INK, arrowprops={"arrowstyle": "-", "color": AXIS, "lw": 0.8})
     _style(ax, grid_axis="both")
-    _pct_axis(ax, "x")
+    _pct_axis(ax, "x", decimals=1)
     _pct_axis(ax, "y")
     ax.set_xlabel("missed hard escalations (share of all test messages)")
     ax.set_ylabel("messages auto-handled")

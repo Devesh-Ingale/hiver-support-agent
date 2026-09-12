@@ -9282,6 +9282,43 @@
           0
         ]
       ]
+    },
+    "by_label_source": {
+      "index": [
+        "0",
+        "1",
+        "2"
+      ],
+      "columns": [
+        "label_source",
+        "n",
+        "intent_accuracy",
+        "escalation_accuracy",
+        "missed_hard"
+      ],
+      "data": [
+        [
+          "assistant_adjudicated",
+          125,
+          0.664,
+          0.888,
+          5
+        ],
+        [
+          "author_blind",
+          32,
+          0.65625,
+          0.90625,
+          1
+        ],
+        [
+          "proposals_agreed",
+          43,
+          0.8837209302325582,
+          0.7906976744186046,
+          1
+        ]
+      ]
     }
   },
   "paired": {
