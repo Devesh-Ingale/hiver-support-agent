@@ -3,7 +3,7 @@
 # customer tweets) BEFORE any model prediction or golden label existed. Frozen as v1 after a 30-item labelling
 # pilot (merges only). The same text is shown to the human labeller and given verbatim to the model.
 brand: SpotifyCares
-version: "1"   # frozen 2026-09-11 after the labelling pilot (41 items): two clarifications, no merges
+version: "1.1"   # definitions + checklist text frozen as v1 on 2026-09-11 (labelling key); 1.1 = dev round 3 (2026-09-12) refined the hard-rule REGEX PATTERNS only (system rules, not label definitions)
 intents:
   - id: playback_or_app_issue
     name: Playback or app malfunction
@@ -108,7 +108,8 @@ policy:
       tier: hard
       description: money — charges, refunds, double payments, failed or declined payments, cancelling a paid plan, paid but not upgraded
       patterns:
-        - '\b(refund\w*|charged|charges|charging|double[- ]charg\w*|overcharg\w*|billed|billing|chargeback|money back|payment (?:failed|declined|issue|problem|method|not working)|paid (?:for|but|twice|again)|still (?:says|shows|on) free|cancel(?:l?ing|led)? (?:my )?(?:premium|subscription|trial|plan|membership)|unsubscribe|free trial)\b'
+        - '\b(refund\w*|double[- ]charg\w*|overcharg\w*|(?:been|got|was|were|being|keeps? getting|still getting) charged|charged (?:me|us|my|twice|again|for|\d|\$|£|€)|charg(?:es|ing) (?:me|us|my)|billed|billing|chargeback|money back|payment (?:failed|declined|issue|problem|method|info|information|details|not working)|paid (?:for|but|twice|again)|still (?:says|shows|on) (?:free|basic)|cancel(?:l?ing|led)? (?:my )?(?:premium|subscription|plan|membership)|unsubscribe)\b'
+        - '\b(?:ads?|adverts?|commercials?)\b.{0,80}\bpremium\b|\bpremium\b.{0,80}\b(?:ads?|adverts?|commercials?)\b'
     - code: legal_safety_threat
       tier: hard
       description: legal threats, fraud/scam accusations, safety or self-harm, harassment or discrimination, press or regulators
@@ -118,7 +119,7 @@ policy:
       tier: hard
       description: the customer explicitly asks for a person, asks you to read a DM/email already sent, or says they have asked repeatedly without an answer
       patterns:
-        - '\b(speak (?:to|with) (?:a |an )?(?:human|person|real person|someone|agent|rep|representative)|talk to (?:a |an )?(?:human|real person|agent|person|someone)|real (?:human|person)|call me|phone (?:number|call|support)|customer service number|(?:second|third|3rd|fourth|4th|fifth|5th|sixth|6th) time (?:i.?ve|i have|i.?m|im|asking|contacting|tweeting|trying)|(?:reply|respond|answer|look at|check|read) (?:to )?(?:my|the|ur|your) (?:dms?|direct messages?|e-?mail)|sent (?:you|u|y.?all) (?:guys |a |an |another )?(?:dm|direct message|e-?mail)|no (?:one|body) (?:is |has )?(?:answering|replying|responding|replied|responded|helping)|still (?:haven.?t|have not|no) (?:heard|reply|response|answer))\b'
+        - '\b(speak (?:to|with) (?:a |an )?(?:human|person|real person|someone|agent|rep|representative)|talk to (?:a |an )?(?:human|real person|agent|person|someone)|real (?:human|person)|call me|phone (?:number|call|support)|customer service number|(?:second|third|3rd|fourth|4th|fifth|5th|sixth|6th) time (?:i.?ve|i have|i.?m|im|asking|contacting|tweeting|trying)|(?:reply|respond|answer|look at|check|read) (?:to )?(?:my|the|ur|your) (?:dms?|direct messages?|e-?mail|private message)|sent (?:you|u|y.?all) (?:guys |a |an |another )?(?:dm|direct message|e-?mail|private message|request)|dm (?:me|us)? ?back|i (?:just )?(?:dm|dm.?d|dmed|messaged|e-?mailed) (?:you|u|y.?all)|no (?:one|body) (?:is |has )?(?:answering|replying|responding|replied|responded|helping)|still (?:haven.?t|have not|no) (?:heard|reply|response|answer))\b'
     - code: anger_churn
       tier: soft
       description: strong anger, insults or a credible threat to cancel — a human should reach out even if the issue itself is routine

@@ -27,6 +27,14 @@ SENSITIVE_RE = re.compile(
     re.I,
 )
 DM_CONTEXT_RE = re.compile(r"\b(dm|direct message|private message|privately)\b", re.I)
+# "We've already replied to your DM" — the agent has not looked at anything; claiming past action is a lie
+CLAIMS_ACTION_RE = re.compile(
+    r"\b(we(?:'ve| have) (?:already |just |now )?(?:replied|responded|answered|sent|looked|checked|fixed|resolved|refunded|"
+    r"credited|updated|restored|reset|escalated)|(?:we|i)(?:'ve| have)? (?:just |already )?sent (?:you )?(?:a |another )?dm|"
+    r"check your (?:inbox|dms?)|(?:reply|response) (?:is |has been )?(?:already )?(?:sent|waiting)|"
+    r"(?:passed|forwarded|escalated) (?:this |it )?(?:on )?to (?:the|our) team|our team (?:is|are) (?:already )?(?:looking|on it))\b",
+    re.I,
+)
 
 
 @dataclass
@@ -65,6 +73,8 @@ def check_reply(reply: str, evidence_texts: list[str], max_chars: int = 280) -> 
         v.add("sensitive_request_public")
     if "|||" in text or "[E" in text:
         v.add("formatting_artifact")   # copied a turn separator or an evidence tag out of the prompt
+    if CLAIMS_ACTION_RE.search(text):
+        v.add("claims_action_taken")
     return v
 
 

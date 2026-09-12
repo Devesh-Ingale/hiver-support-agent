@@ -63,6 +63,10 @@ def test_check_reply_catches_each_violation():
     assert "sensitive_request_public" not in check_reply("DM us and we'll reset your password from there", ev).codes
     assert "formatting_artifact" in check_reply("Try a reinstall. ||| Thanks! Let us know", ev).codes
     assert "formatting_artifact" in check_reply("As shown in [E1], try a reinstall", ev).codes
+    assert "claims_action_taken" in check_reply("Hey there! We've already replied to your DM. Check your inbox 🙂", ev).codes
+    assert "claims_action_taken" in check_reply("Hi! We've just sent a DM your way. Let's carry on there", ev).codes
+    assert "claims_action_taken" in check_reply("Sorry! We've passed this on to the team", ev).codes
+    assert "claims_action_taken" not in check_reply("Could you send us a DM with your account email? We'll take a look there.", ev).codes
     assert not check_reply("Sorry to hear that! Try logging out and back in, then let us know how it goes.", ev)
 
 
