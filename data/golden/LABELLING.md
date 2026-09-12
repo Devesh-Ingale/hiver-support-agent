@@ -14,6 +14,18 @@ cd "C:\Users\deves\Downloads\Hiver Assignment\hiver-support-agent"
 .\.venv\Scripts\python -m support_agent.cli label --finalize      # builds data/golden/test.jsonl + dev.jsonl
 ```
 
+## Model-assisted mode (main pass after the pilot, ~5–10 s per item)
+
+After `label --propose` has run, each tweet shows what two models proposed (neither is the system under test):
+
+```
+  proposal: 5e2   (payment_billing_subscription, escalate payment_refund)  — both models agree
+  code [enter = 5e2]:
+```
+**Enter** accepts the shown code; **any code overrides** it; `x` excludes. A `⚠ models disagree on intent`
+line means the two models read the tweet differently — read it properly and decide yourself. Acceptance,
+overrides and disagreements are recorded per item and reported. The round-2 re-label is always blind.
+
 ## Per item — compact mode (default, ~15–20 s)
 
 One code per tweet, then Enter. Grammar: `<intent>[/<secondary>][e<reason>][a<0-2>][c<1-3>][f<flags>] [n:<note>]`

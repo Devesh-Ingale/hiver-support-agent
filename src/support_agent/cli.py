@@ -67,6 +67,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--review", action="store_true", help="summarise the labels so far (distributions, confidence, flags, notes)")
     s.add_argument("--verbose-prompts", action="store_true", help="ask each field separately instead of one compact code per tweet")
     s.add_argument("--redo", default="", help="comma-separated item ids to drop from this round's labels and label again (pilot corrections)")
+    s.add_argument("--propose", action="store_true", help="generate model proposals for the unlabelled items -> data/golden/proposals.jsonl (2 models)")
+    s.add_argument("--blind", action="store_true", help="ignore proposals.jsonl and label blind even if it exists")
 
     s = sub.add_parser("index", help="build the TF-IDF retrieval index over the historical corpus")
 
@@ -250,9 +252,37 @@ def cmd_label(args, settings) -> None:
     candidates = read_jsonl(_require(settings.paths.golden / "candidates.jsonl", "run `sample` first"))
     r1_path = settings.paths.golden / "labels_round1.jsonl"
 
+    proposals_path = settings.paths.golden / "proposals.jsonl"
+    proposals = {} if (args.blind or not proposals_path.exists()) else {r["item_id"]: r for r in read_jsonl(proposals_path)}
+
     if args.review:
         _review_labels(read_jsonl(_require(settings.paths.golden / f"labels_round{args.round}.jsonl", "nothing labelled yet")),
                        {c["item_id"]: c for c in candidates})
+        if proposals and r1_path.exists():
+            from .eval.proposals import proposal_accuracy
+
+            print("\nproposal accuracy vs BLIND human labels:", json.dumps(proposal_accuracy(proposals, read_jsonl(r1_path)), indent=1))
+        return
+
+    if args.propose:
+        from .eval.proposals import merge_proposals, propose_label
+        from .llm import make_client
+        from .llm.batch import run_batch
+
+        done = {r["item_id"] for r in read_jsonl(r1_path)} if r1_path.exists() else set()
+        redo_ids = {i.strip() for i in args.redo.split(",") if i.strip()}
+        todo = [c for c in candidates if c["part"] in ("A", "B", "dev") and (c["item_id"] not in done or c["item_id"] in redo_ids)]
+        # neither proposer is the system under test (qwen3:4b-instruct); B is a local model unused elsewhere
+        llm_a = make_client("gemini", settings)
+        llm_b = make_client("local", settings, model="qwen3.5:2b")
+        print(f"proposing labels for {len(todo)} items with A={llm_a.model} and B={llm_b.model}")
+
+        def fn(c):
+            return merge_proposals(c["item_id"], propose_label(llm_a, taxonomy, c["root_text"]), propose_label(llm_b, taxonomy, c["root_text"]))
+
+        rows = run_batch(todo, fn, proposals_path, desc="proposals")
+        ok = [r for r in rows if "error" not in r]
+        print(f"{len(ok)} proposals; models agree on intent {sum(r['agree_intent'] for r in ok)}/{len(ok)}, on escalation {sum(r['agree_escalate'] for r in ok)}/{len(ok)}")
         return
 
     if args.finalize:
@@ -285,7 +315,7 @@ def cmd_label(args, settings) -> None:
         write_jsonl(out, kept)
         print(f"dropped {len(existing) - len(kept)} label(s) for re-entry: {sorted(redo_ids)}")
         todo = [c for c in candidates if c["item_id"] in redo_ids]
-        n = Labeller(taxonomy, todo, out, round_no=args.round, compact=not args.verbose_prompts).run()
+        n = Labeller(taxonomy, todo, out, round_no=args.round, compact=not args.verbose_prompts, proposals=proposals).run()
         print(f"\nre-labelled {n} item(s) -> {out}")
         return
 
@@ -298,8 +328,10 @@ def cmd_label(args, settings) -> None:
         ids = set(select_for_relabel(round1, n=args.relabel, seed=settings.seed))
         todo = [c for c in candidates if c["item_id"] in ids]
         out = settings.paths.golden / "labels_round2.jsonl"
-    n = Labeller(taxonomy, todo, out, round_no=args.round, compact=not args.verbose_prompts).run(limit=args.limit)
-    print(f"\nlabelled {n} items this session -> {out}")
+    if args.round == 2:
+        proposals = {}   # the re-label pass stays blind so self-agreement measures the human, not the proposals
+    n = Labeller(taxonomy, todo, out, round_no=args.round, compact=not args.verbose_prompts, proposals=proposals).run(limit=args.limit)
+    print(f"\nlabelled {n} items this session -> {out}" + ("  (model-assisted)" if proposals else "  (blind)"))
 
 
 def _review_labels(labels: list[dict], candidates: dict[str, dict]) -> None:

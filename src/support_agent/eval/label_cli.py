@@ -73,7 +73,8 @@ class Quit(Exception):
 class Labeller:
     def __init__(self, taxonomy: Taxonomy, candidates: list[dict], out_path: Path, round_no: int = 1,
                  input_fn: Callable[[str], str] = input, print_fn: Callable[[str], None] = print,
-                 clock: Callable[[], float] = time.monotonic, compact: bool = True):
+                 clock: Callable[[], float] = time.monotonic, compact: bool = True,
+                 proposals: dict[str, dict] | None = None):
         self.taxonomy = taxonomy
         self.candidates = candidates
         self.out_path = out_path
@@ -82,7 +83,9 @@ class Labeller:
         self._print = print_fn
         self._clock = clock
         self.compact = compact
+        self.proposals = proposals or {}     # item_id -> merged proposal row (model-assisted mode)
         self.intents = taxonomy.intents
+        self._intent_number = {it.id: n for n, it in enumerate(self.intents, start=1)}
 
     # -- display -------------------------------------------------------------------------------------
     def cheat_sheet(self) -> str:
@@ -100,6 +103,9 @@ class Labeller:
         if self.compact:
             lines.append("CODE: " + COMPACT_HELP)
             lines.append("      defaults: no secondary · auto (no e) · anger 0 · confidence 3 · no flags · no note")
+            if self.proposals:
+                lines.append("ASSISTED: two models propose a label; Enter = accept the shown code · type a code = override · "
+                             "a ⚠ marks a model disagreement — look harder there")
         else:
             lines.append("KEYS: number = choose · enter = default/none · x = exclude item · ? = show this sheet · q = quit (progress is saved)")
         lines.append("")
@@ -143,7 +149,9 @@ class Labeller:
             "excluded": False, "exclusion_reason": None,
         }
         if self.compact:
-            fields = self._ask_compact()
+            proposal = self.proposals.get(cand["item_id"])
+            default_code = self._show_proposal(proposal) if proposal else None
+            fields = self._ask_compact(default_code)
             if fields is None:  # excluded
                 row.update(excluded=True, exclusion_reason=self._ask_text("exclusion reason"),
                            label_seconds=round(self._clock() - t0, 1))
@@ -158,6 +166,10 @@ class Labeller:
                 needs_reply="noise_or_spam" not in fields["flags"], note=fields["note"],
                 label_seconds=round(self._clock() - t0, 1),
             )
+            if proposal:
+                row.update(assisted=True, accepted_proposal=fields.get("accepted_default", False),
+                           proposal_a=proposal["a"], proposal_b=proposal["b"],
+                           models_agree_intent=proposal["agree_intent"], models_agree_escalate=proposal["agree_escalate"])
             return row
 
         primary = self._ask_intent("intent # (primary)", allow_exclude=True)
@@ -190,14 +202,52 @@ class Labeller:
             return self._prompt(text)
         return answer
 
-    def _ask_compact(self) -> dict | None:
-        """One code per tweet; None means the item is excluded."""
+    def proposal_code(self, p: dict) -> str | None:
+        """Compact code equivalent of one model's proposal (None if the proposal is unusable)."""
+        if not p or p.get("intent") not in self._intent_number or p.get("escalate") is None:
+            return None
+        code = str(self._intent_number[p["intent"]])
+        if p.get("intent_secondary") in self._intent_number:
+            code += f"/{self._intent_number[p['intent_secondary']]}"
+        if p["escalate"]:
+            if p.get("reason_code") not in LABELLER_REASONS:
+                return None
+            code += f"e{LABELLER_REASONS.index(p['reason_code']) + 1}"
+        if p.get("anger"):
+            code += f"a{p['anger']}"
+        return code
+
+    def _show_proposal(self, proposal: dict) -> str | None:
+        """Print both proposals; return the code offered as the Enter default (model A's), or None."""
+        a, b = proposal["a"], proposal["b"]
+        code_a, code_b = self.proposal_code(a), self.proposal_code(b)
+        if code_a and code_a == code_b:
+            self._print(f"  proposal: {code_a}   ({a['intent']}{', escalate ' + a['reason_code'] if a['escalate'] else ', auto'})  — both models agree")
+            return code_a
+        marks = []
+        if not proposal["agree_intent"]:
+            marks.append("intent")
+        if not proposal["agree_escalate"]:
+            marks.append("escalate")
+        self._print(f"  ⚠ models disagree on {' & '.join(marks) or 'details'}:")
+        self._print(f"    A {a['model']}: {code_a or '?'}  ({a['intent']}{', escalate ' + str(a['reason_code']) if a['escalate'] else ', auto'})")
+        self._print(f"    B {b['model']}: {code_b or '?'}  ({b['intent']}{', escalate ' + str(b['reason_code']) if b['escalate'] else ', auto'})")
+        return code_a
+
+    def _ask_compact(self, default_code: str | None = None) -> dict | None:
+        """One code per tweet; None means the item is excluded. Enter accepts `default_code` when one is offered."""
         while True:
-            answer = self._prompt("code")
+            answer = self._prompt(f"code [enter = {default_code}]" if default_code else "code")
+            if answer == "" and default_code:
+                fields = parse_compact_code(default_code, len(self.intents))
+                fields["accepted_default"] = True
+                return fields
             if answer.lower() == "x":
                 return None
             try:
-                return parse_compact_code(answer, len(self.intents))
+                fields = parse_compact_code(answer, len(self.intents))
+                fields["accepted_default"] = False
+                return fields
             except ValueError as e:
                 self._print(f"    ? {e}\n    {COMPACT_HELP}")
 

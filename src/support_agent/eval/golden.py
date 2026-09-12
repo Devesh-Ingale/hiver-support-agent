@@ -188,8 +188,9 @@ def sampling_note(stats: SampleStats, split_stats: dict, cfg: SampleConfig) -> s
         "",
         "Resulting counts: " + ", ".join(f"{k}={v}" for k, v in stats.counts.items() if not k.startswith("reason:")) + ".",
         "",
-        "Labelling protocol: taxonomy and escalation policy frozen and committed first; a 30-item pilot (merges only) preceded the main pass; "
-        "items were shown in random order with no model output, no cluster id and no brand reply visible; 40 items were re-labelled blind "
-        "on a later day to estimate label noise (Cohen's κ).",
+        "Labelling protocol: taxonomy and escalation policy frozen and committed first; a pilot was labelled blind (no model output, cluster id "
+        "or brand reply visible) and allowed merges/clarifications only; the remaining items were model-assisted (two proposers that are not the "
+        "system under test; the labeller accepted or overrode each proposal, recorded per item); random order; 40 items re-labelled blind on a "
+        "later day to estimate label noise (Cohen's κ). See LABELLING.md for the exact protocol and DECISIONS.md #21 for the disclosure.",
     ]
     return "\n".join(lines) + "\n"

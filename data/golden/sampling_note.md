@@ -20,4 +20,4 @@ Draws (seed 42):
 
 Resulting counts: A=120, B=80, spare=75, dev=50.
 
-Labelling protocol: taxonomy and escalation policy frozen and committed first; a 30-item pilot (merges only) preceded the main pass; items were shown in random order with no model output, no cluster id and no brand reply visible; 40 items were re-labelled blind on a later day to estimate label noise (Cohen's κ).
+Labelling protocol: taxonomy and escalation policy frozen and committed first (`51f0617`); a pilot of 41 items was labelled **blind** (no model output, cluster id or brand reply visible) and led to two definition clarifications and no merges. The remaining 209 items were **model-assisted**: two models that are not the system under test (`gemini-3.5-flash-lite`, local `qwen3.5:2b`) proposed a label, the labeller saw both proposals and any disagreement, and accepted or overrode each one; acceptance and disagreement are recorded per item and reported, and the proposers' accuracy against the blind pilot labels is given as the anchoring-risk estimate. Items were shown in random order. 40 items were re-labelled blind on a later day to estimate label noise (Cohen's κ).
