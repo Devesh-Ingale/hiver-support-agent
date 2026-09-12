@@ -20,7 +20,7 @@ Every time a metric was computed on the test set, with the prompt/config version
 
 | # | date | what was computed | prompt version | notes |
 |---|------|-------------------|----------------|-------|
-| — | — | (no test-set computations yet) | — | — |
+| 1 | 2026-09-13 00:40 IST | `cli eval` on all systems (intent, escalation, cost, judge `main` 200 + `simple` 51) | prompt v1.3 · taxonomy 1.1 · post-processor final | First and only computation before the report; no change to prompts, rules or thresholds after it. Later `eval` runs only add judge/human files (pairwise, remaining absolute, ratings) — the system outputs are frozen at commit `37f2733`. |
 
 ## Dev-set iteration log
 

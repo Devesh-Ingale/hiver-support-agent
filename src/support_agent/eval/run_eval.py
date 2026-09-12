@@ -131,6 +131,8 @@ def subgroup_block(test: list[dict], rows: dict[str, dict]) -> dict:
         "conf": [t.get("labeller_confidence_1_3") for t in items],
         "intent": [t["intent_primary"] for t in items],
         "trivial": [t["reason_code"] in ("non_english", "no_actionable_content") for t in items],
+        # who wrote the label: blind author, agreed model proposals, or the assistant's adjudication
+        "label_source": [("author_blind" if t.get("labeller", "author") == "author" else t.get("label_source", "assistant")) for t in items],
     })
     median_tokens = df["tokens"].median()
     df["recurring"] = np.where(df["sim"].isna(), "n/a", np.where(df["sim"] >= 0.5, "recurring (sim>=0.5)", "novel (sim<0.5)"))
@@ -142,7 +144,8 @@ def subgroup_block(test: list[dict], rows: dict[str, dict]) -> dict:
         return g.reset_index()
 
     return {"by_part": agg("part"), "recurring_vs_novel": agg("recurring"), "short_vs_long": agg("length"),
-            "by_labeller_confidence": agg("conf"), "trivial_in_out": agg("trivial"), "by_intent": agg("intent")}
+            "by_labeller_confidence": agg("conf"), "trivial_in_out": agg("trivial"), "by_intent": agg("intent"),
+            "by_label_source": agg("label_source")}
 
 
 def judge_block(judge_dir: Path, runs: dict[str, dict[str, dict]], test_ids: set[str]) -> dict:
